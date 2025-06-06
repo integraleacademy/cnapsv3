@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Outil de suivi des demandes CNAPS</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .header-left { display: flex; align-items: center; }
+    header img { height: 100px; margin-right: 20px; }
+    header h1 { font-size: 24px; margin: 0; }
+    .btn-link { background-color: #4CAF50; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+    table { width: 100%%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; vertical-align: top; }
+    input, select, button, textarea { margin: 5px 0; padding: 5px; }
+    form.inline { display: inline; }
+    .btn-green { background-color: #4CAF50; color: white; padding: 4px 8px; border: none; border-radius: 4px; }
+    .btn-orange { background-color: #FFA500; color: white; padding: 4px 8px; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 20px;">
+    <a href="/export" style="padding: 10px 15px; background-color: green; color: white; text-decoration: none; border-radius: 5px;">Exporter CSV</a>
+    <a href="/import" style="padding: 10px 15px; background-color: orange; color: white; text-decoration: none; border-radius: 5px;">Importer CSV</a>
+</div>
+
+  <header>
+    <div class="header-left">
+      <img src="/static/logo.png" alt="Logo">
+      <h1>Outil de suivi des demandes CNAPS</h1>
+    </div>
+    <a class="btn-link" href="https://depot-teleservices-cnaps.interieur.gouv.fr/" target="_blank">Nouvelle demande CNAPS</a>
+  </header>
+
+  <a href="/ajouter_session" style="background-color: #007BFF; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: inline-block;">AJOUTER UNE SESSION</a>
+
+
+  <form method="POST" action="/add">
+    <input name="nom" placeholder="Nom" required>
+    <input name="prenom" placeholder="Prénom" required>
+    <select id="formation" name="formation" onchange="updateSessions()" required>
+      <option value="">-- Type de formation --</option>
+      <option value="APS">APS</option>
+      <option value="A3P">A3P</option>
+    </select>
+    <select id="session" name="session" required></select>
+    <input name="lien" placeholder="Lien CNAPS (facultatif)">
+    <button type="submit">Ajouter</button>
+  </form>
+
+  <table>
+    <thead><tr>
+            <th>Nom</th>
+            <th>Prénom</th>
+            <th>Formation</th>
+            <th>Session</th>
+            <th>Lien suivi CNAPS</th>
+            <th>Statut dossier</th>
+            <th>Statut CNAPS</th>
+            <th>Commentaires</th>
+            <th>Actions</th>
+</tr></thead>
+    
+        
+        
+        <tbody>
+            {% for dossier in dossiers %}
+            <tr>
+                <td>{{ dossier[1] }}</td> <!-- Nom -->
+                <td>{{ dossier[2] }}</td> <!-- Prénom -->
+                <td>{{ dossier[3] }}</td> <!-- Formation -->
+                <td>{{ dossier[4] }}</td> <!-- Session -->
+                
+<td>
+    <form action="/edit/{{ dossier[0] }}" method="post">
+        <input type="text" name="lien" value="{{ dossier[5] or '' }}" placeholder="Modifier lien" />
+        <button type="submit">💾</button>
+    </form>
+    {% if dossier[5] %}
+        <a href="{{ dossier[5] }}" target="_blank">🔗 Voir le lien</a>
+    {% endif %}
+</td>
+
+                
+<td>
+    {% if dossier[6] == "COMPLET" %}
+        <a href="/statut/{{ dossier[0] }}/INCOMPLET">
+            <span style="background-color:green;color:white;padding:5px;border-radius:5px;cursor:pointer;">COMPLET</span>
+        </a>
+    {% else %}
+        <a href="/statut/{{ dossier[0] }}/COMPLET">
+            <span style="background-color:orange;color:white;padding:5px;border-radius:5px;cursor:pointer;">INCOMPLET</span>
+        </a>
+    {% endif %}
+</td>
+
+                <td>
+                    <form action="/statut_cnaps/{{ dossier[0] }}" method="post">
+                        <select name="statut_cnaps">
+                            <option value="">--</option>
+                            <option value="TRANSMIS" {% if dossier[8] == "TRANSMIS" %}selected{% endif %}>TRANSMIS</option>
+                            <option value="ENREGISTRÉ" {% if dossier[8] == "ENREGISTRÉ" %}selected{% endif %}>ENREGISTRÉ</option>
+                            <option value="INSTRUCTION" {% if dossier[8] == "INSTRUCTION" %}selected{% endif %}>INSTRUCTION</option>
+                            <option value="ACCEPTÉ" {% if dossier[8] == "ACCEPTÉ" %}selected{% endif %}>ACCEPTÉ</option>
+                            <option value="REFUSÉ" {% if dossier[8] == "REFUSÉ" %}selected{% endif %}>REFUSÉ</option>
+                        </select>
+                        <button type="submit">💾</button>
+                    </form>
+                </td>
+                <td>
+                    <form action="/commentaire/{{ dossier[0] }}" method="post">
+                        <textarea name="commentaire" rows="1" cols="20">{{ dossier[7] or '' }}</textarea>
+                        <button type="submit">💾</button>
+                    </form>
+                </td>
+                <td>
+                    <a href="/attestation/{{ dossier[0] }}">📄 Attestation</a><br>
+                    <a href="/delete/{{ dossier[0] }}" style="color:red;">❌ Supprimer</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+
+
+  </table>
+
+  <script>
+    function updateSessions() {
+      var formation = document.getElementById("formation").value;
+      var session = document.getElementById("session");
+      session.innerHTML = "";
+
+      if (formation === "APS") {
+        session.add(new Option("9 juillet au 12 août 2025", "9 juillet au 12 août 2025"));
+        session.add(new Option("8 septembre au 10 octobre 2025", "8 septembre au 10 octobre 2025"));
+      } else if (formation === "A3P") {
+        session.add(new Option("14 octobre au 19 décembre 2025", "14 octobre au 19 décembre 2025"));
+      }
+    }
+  </script>
+</body>
+</html>
