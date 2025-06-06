@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Suivi CNAPS</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    .inline { display: inline; }
+    button { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Outil de suivi des demandes CNAPS</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th>
+        <th>Prénom</th>
+        <th>Formation</th>
+        <th>Session</th>
+        <th>Lien suivi CNAPS</th>
+        <th>Statut dossier</th>
+        <th>Statut CNAPS</th>
+        <th>Commentaires</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dossier in dossiers %}
+      <tr>
+        <td>{{ dossier[1] }}</td>
+        <td>{{ dossier[2] }}</td>
+        <td>{{ dossier[3] }}</td>
+        <td>{{ dossier[4] }}</td>
+        <td><a href="{{ dossier[5] }}" target="_blank">Lien</a></td>
+        <td>{{ dossier[6] }}</td>
+        <td>
+          <form class="inline" method="post" action="/update_suivi">
+            <input type="hidden" name="id" value="{{ dossier[0] }}">
+            {% for status, label, color in [
+              ('TRANSMIS AU CNAPS', 'TRANSMIS AU CNAPS', 'gray'),
+              ('DOSSIER ENREGISTRÉ', 'DOSSIER ENREGISTRÉ', 'orange'),
+              ('INSTRUCTION EN COURS', 'INSTRUCTION EN COURS', 'gold'),
+              ('ACCEPTÉ', 'ACCEPTÉ', 'green'),
+              ('REFUSÉ', 'REFUSÉ', 'black')
+            ] %}
+              <button type="submit" name="suivi_cnaps" value="{{ status }}" style="background-color: {{ color }}; color: white; border: none; padding: 4px 6px; margin: 2px; border-radius: 4px; font-size: 10px; {% if dossier[8] == status %}outline: 2px solid white;{% endif %}">
+                {{ label }}
+              </button>
+            {% endfor %}
+          </form>
+        </td>
+        <td>{{ dossier[7] }}</td>
+        <td>
+          <a href="/attestation/{{ dossier[0] }}">Attestation</a> |
+          <a href="/delete/{{ dossier[0] }}">Supprimer</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
