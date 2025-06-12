@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Outil de gestion CNAPS - V9.4 COMPLET</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        input, select { font-size: 0.85rem; }
+        th, td { vertical-align: middle !important; }
+    </style>
+</head>
+<body class="container py-4">
+    <h1 class="mb-4">Outil de gestion CNAPS - V9.4</h1>
+
+    <!-- Formulaire d'ajout en haut -->
+    <div class="card mb-4">
+        <div class="card-header">Ajouter un dossier</div>
+        <div class="card-body">
+            <form action="/ajouter" method="post" class="row g-3">
+                <div class="col-md-3"><input type="text" name="nom" class="form-control" placeholder="Nom" required></div>
+                <div class="col-md-3"><input type="text" name="prenom" class="form-control" placeholder="Prénom" required></div>
+                <div class="col-md-3">
+                    <select name="formation" class="form-control" required>
+                        <option value="">Formation</option>
+                        <option>APS</option>
+                        <option>A3P</option>
+                        <option>SSIAP 1</option>
+                        <option>VTC</option>
+                        <option>BTS</option>
+                    </select>
+                </div>
+                <div class="col-md-3"><input type="text" name="session" class="form-control" placeholder="Session"></div>
+                <div class="col-md-6"><input type="url" name="lien_suivi" class="form-control" placeholder="Lien suivi CNAPS"></div>
+                <div class="col-md-3">
+                    <select name="statut_dossier" class="form-control">
+                        <option value="">Statut dossier</option>
+                        <option>Complet</option>
+                        <option>Incomplet</option>
+                        <option>En attente</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="statut_cnaps" class="form-control">
+                        <option value="">Statut CNAPS</option>
+                        <option>Transmis</option>
+                        <option>Enregistré</option>
+                        <option>Validé</option>
+                        <option>Rejeté</option>
+                    </select>
+                </div>
+                <div class="col-md-12"><input type="text" name="commentaire" class="form-control" placeholder="Commentaire"></div>
+                <div class="col-md-3"><input type="date" name="date_de_transmission" class="form-control" required></div>
+                <div class="col-md-12"><button type="submit" class="btn btn-primary">Ajouter</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Le reste inchangé : filtres, tableau, attestation -->
+
+
+    <div class="card mb-4">
+        <div class="card-header">Filtres</div>
+        <div class="card-body">
+            <form method="get" action="/" class="row g-3">
+                <div class="col-md-3"><input type="text" name="search" value="{{ request.args.get('search', '') }}" class="form-control" placeholder="Nom ou Prénom"></div>
+                <div class="col-md-3"><input type="text" name="formation" value="{{ request.args.get('formation', '') }}" class="form-control" placeholder="Formation"></div>
+                <div class="col-md-3"><input type="text" name="statut_dossier" value="{{ request.args.get('statut_dossier', '') }}" class="form-control" placeholder="Statut dossier"></div>
+                <div class="col-md-3"><input type="text" name="statut_cnaps" value="{{ request.args.get('statut_cnaps', '') }}" class="form-control" placeholder="Statut CNAPS"></div>
+                <div class="col-md-3"><input type="date" name="date_debut" value="{{ request.args.get('date_debut', '') }}" class="form-control"></div>
+                <div class="col-md-3"><input type="date" name="date_fin" value="{{ request.args.get('date_fin', '') }}" class="form-control"></div>
+                <div class="col-md-3"><button type="submit" class="btn btn-success">Filtrer</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tableau édition inline avec attestation -->
+    <table class="table table-striped table-bordered align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Date</th><th>Nom</th><th>Prénom</th><th>Formation</th><th>Session</th>
+                <th>Lien</th><th>Statut dossier</th><th>Statut CNAPS</th><th>Commentaire</th><th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for d in dossiers %}
+            <tr>
+                <form method="post" action="/modifier/{{ d[0] }}">
+                <td><input type="date" name="date_de_transmission" value="{{ d[9] }}" class="form-control"></td>
+                <td><input type="text" name="nom" value="{{ d[1] }}" class="form-control"></td>
+                <td><input type="text" name="prenom" value="{{ d[2] }}" class="form-control"></td>
+                <td>
+                    <select name="formation" class="form-control">
+                        <option {{ 'selected' if d[3]=='' }}>-</option>
+                        <option {% if d[3]=='APS' %}selected{% endif %}>APS</option>
+                        <option {% if d[3]=='A3P' %}selected{% endif %}>A3P</option>
+                        <option {% if d[3]=='SSIAP 1' %}selected{% endif %}>SSIAP 1</option>
+                        <option {% if d[3]=='VTC' %}selected{% endif %}>VTC</option>
+                        <option {% if d[3]=='BTS' %}selected{% endif %}>BTS</option>
+                    </select>
+                </td>
+                <td><input type="text" name="session" value="{{ d[4] }}" class="form-control"></td>
+                <td><input type="url" name="lien_suivi" value="{{ d[5] }}" class="form-control"></td>
+                <td>
+                    <select name="statut_dossier" class="form-control">
+                        <option {{ 'selected' if d[6]=='' }}>-</option>
+                        <option {% if d[6]=='Complet' %}selected{% endif %}>Complet</option>
+                        <option {% if d[6]=='Incomplet' %}selected{% endif %}>Incomplet</option>
+                        <option {% if d[6]=='En attente' %}selected{% endif %}>En attente</option>
+                    </select>
+                </td>
+                <td>
+                    <select name="statut_cnaps" class="form-control">
+                        <option {{ 'selected' if d[7]=='' }}>-</option>
+                        <option {% if d[7]=='Transmis' %}selected{% endif %}>Transmis</option>
+                        <option {% if d[7]=='Enregistré' %}selected{% endif %}>Enregistré</option>
+                        <option {% if d[7]=='Validé' %}selected{% endif %}>Validé</option>
+                        <option {% if d[7]=='Rejeté' %}selected{% endif %}>Rejeté</option>
+                    </select>
+                </td>
+                <td><input type="text" name="commentaire" value="{{ d[8] }}" class="form-control"></td>
+                <td>
+                    <button type="submit" class="btn btn-sm btn-primary mb-1">💾</button>
+                    <a href="/attestation/{{ d[0] }}" class="btn btn-sm btn-info mb-1" target="_blank">📄</a>
+                    <a href="/supprimer/{{ d[0] }}" class="btn btn-sm btn-danger" onclick="return confirm('Supprimer ?')">🗑️</a>
+                </td>
+                </form>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="/export" class="btn btn-warning">Exporter les données</a>
+</body>
+</html>
