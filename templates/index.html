@@ -1,0 +1,75 @@
+
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <header class="d-flex justify-content-between align-items-center mb-4">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" style="height: 60px;">
+        <a href="https://depot-teleservices-cnaps.interieur.gouv.fr/" target="_blank" class="btn btn-success btn-lg">Nouvelle demande CNAPS</a>
+    </header>
+
+    <h1 class="mb-4">Suivi des dossiers</h1>
+
+    {{ contenu_dynamique }}
+
+</div>
+
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background-color: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    th, td {
+        padding: 15px;
+        text-align: center;
+        border-bottom: 1px solid #eee;
+    }
+    th {
+        background-color: #ecf0f1;
+        font-weight: 600;
+    }
+    tr:hover {
+        background-color: #f1f1f1;
+    }
+    button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    button:hover {
+        background-color: #2980b9;
+    }
+    input, select, textarea {
+        padding: 8px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        width: 100%;
+    }
+    .statut-complet {
+        background-color: #2ecc71;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+    .statut-incomplet {
+        background-color: #e67e22;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
