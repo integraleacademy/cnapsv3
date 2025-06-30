@@ -287,3 +287,27 @@ def modifier_statut_cnaps(id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (statut_cnaps, id))
     return redirect("/")
+
+from flask import send_file
+
+@app.route("/debug_sessions")
+def debug_sessions():
+    import sqlite3
+    try:
+        conn = sqlite3.connect("data/cnaps.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sessions")
+        sessions = cursor.fetchall()
+        conn.close()
+        if not sessions:
+            return "❌ Aucune session enregistrée (base vide ou écrasée)"
+        return f"✅ {len(sessions)} session(s) trouvée(s) :<br>" + "<br>".join([str(s) for s in sessions])
+    except Exception as e:
+        return f"⚠️ Erreur lors de l'accès à la base : {e}"
+
+@app.route("/download_db")
+def download_db():
+    try:
+        return send_file("data/cnaps.db", as_attachment=True)
+    except Exception as e:
+        return f"⚠️ Erreur lors du téléchargement : {e}"
