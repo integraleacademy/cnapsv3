@@ -54,3 +54,10 @@ def attestation_pdf(id):
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire["nom"]}.pdf'
     return response
+
+@app.route("/statut_cnaps/<int:id>", methods=["POST"])
+def update_statut_cnaps(id):
+    nouveau_statut = request.form.get("statut_cnaps")
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
+    return redirect("/")
