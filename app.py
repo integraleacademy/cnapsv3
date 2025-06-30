@@ -1,5 +1,5 @@
 
-def init_sessions():
+def init_sessions()
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -27,7 +27,7 @@ app.secret_key = "cnaps_clé_ultra_secrète_42"
 DB_NAME = "cnaps.db"
 
 def init_db():
-    init_sessions():
+    init_sessions()
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dossiers (
