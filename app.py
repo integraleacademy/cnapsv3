@@ -1,13 +1,40 @@
-from flask import make_response
+from flask import Flask, render_template, request, redirect, make_response
 from weasyprint import HTML
+import sqlite3
+import os
+
+app = Flask(__name__)
+DB_NAME = "cnaps.db"
+
 
 def get_stagiaire_by_id(id):
-    import sqlite3
-    conn = sqlite3.connect("cnaps.db")
+    conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     stagiaire = conn.execute("SELECT * FROM dossiers WHERE id = ?", (id,)).fetchone()
     conn.close()
     return stagiaire
+
+
+@app.route("/")
+def index():
+    filtre_cnaps = request.args.get('filtre_cnaps', 'Tous')
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+
+        # Récupérer tous les statuts distincts existants
+        cur_statuts = conn.execute("SELECT DISTINCT statut_cnaps FROM dossiers")
+        statuts_disponibles = sorted([row['statut_cnaps'] for row in cur_statuts if row['statut_cnaps']])
+
+        # Appliquer le filtre
+        if filtre_cnaps != 'Tous':
+            cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=?", (filtre_cnaps,))
+        else:
+            cur = conn.execute("SELECT * FROM dossiers")
+        dossiers = cur.fetchall()
+
+    return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
+
 
 @app.route('/attestation/<int:id>')
 def attestation_pdf(id):
