@@ -1,0 +1,35 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion des dates de formation</title>
+</head>
+<body>
+    <h1>Dates de formation</h1>
+    <form method="POST">
+        <input type="text" name="type" placeholder="Type (APS, SSIAP, etc)" required>
+        <input type="text" name="nom" placeholder="Nom de la session" required>
+        <input type="date" name="date_debut" required>
+        <input type="date" name="date_fin">
+        <button type="submit">Ajouter</button>
+    </form>
+    <br>
+    <table border="1" cellpadding="5">
+        <tr>
+            <th>Type</th><th>Nom</th><th>Début</th><th>Fin</th><th>Action</th>
+        </tr>
+        {% for session in sessions %}
+        <tr>
+            <td>{{ session['type'] }}</td>
+            <td>{{ session['nom'] }}</td>
+            <td>{{ session['date_debut'] }}</td>
+            <td>{{ session['date_fin'] or "" }}</td>
+            <td><a href="/admin/sessions/delete/{{ session['id'] }}">🗑️ Supprimer</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    <a href="/admin">← Retour</a>
+</body>
+</html>
