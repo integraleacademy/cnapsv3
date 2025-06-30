@@ -321,3 +321,9 @@ def debug_disk():
     except Exception as e:
         return f"Erreur : {e}"
 
+@app.route("/download_disk_db")
+def download_disk_db():
+    from flask import send_file
+    return send_file("/mnt/data/cnaps.db", as_attachment=True)
+
+
