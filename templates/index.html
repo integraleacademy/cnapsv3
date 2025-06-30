@@ -3,7 +3,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Outil de suivi des demandes CNAPS</title>
+  <title>Gestion des dossiers CNAPS Intégrale Academy</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -37,6 +37,9 @@
     }
     .statut-default {
         background-color: lightgray; color: black; font-weight: bold;
+    }
+   .statut-docsmanquants {
+        background-color: red ; color: white; font-weight: bold;
     }
 </style>
 
@@ -154,6 +157,7 @@
                     {% elif dossier[8] == 'INSTRUCTION' %}statut-instruction
                     {% elif dossier[8] == 'ACCEPTÉ' %}statut-accepte
                     {% elif dossier[8] == 'REFUSÉ' %}statut-refuse
+		    {% elif dossier[8] == 'DOCS COMPLEMENTAIRES' %}statut-docsmanquants
                     {% else %}statut-default{% endif %}">
             <option value="">--</option>
             <option value="TRANSMIS" {% if dossier[8] == "TRANSMIS" %}selected{% endif %}>TRANSMIS</option>
@@ -161,6 +165,7 @@
             <option value="INSTRUCTION" {% if dossier[8] == "INSTRUCTION" %}selected{% endif %}>INSTRUCTION</option>
             <option value="ACCEPTÉ" {% if dossier[8] == "ACCEPTÉ" %}selected{% endif %}>ACCEPTÉ</option>
             <option value="REFUSÉ" {% if dossier[8] == "REFUSÉ" %}selected{% endif %}>REFUSÉ</option>
+            <option value="DOCS COMPLEMENTAIRES" {% if dossier[8] == "DOCS COMPLEMENTAIRES" %}selected{% endif %}>DOCS COMPLEMENTAIRES</option>
         </select>
         <button type="submit">💾</button>
     </form>
