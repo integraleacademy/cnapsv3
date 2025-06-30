@@ -47,7 +47,9 @@ def index():
             cur = conn.execute("SELECT * FROM dossiers")
         dossiers = cur.fetchall()
 
-    return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
+        cur_sessions = conn.execute("SELECT nom FROM sessions ORDER BY date_debut ASC")
+        sessions_disponibles = [row["nom"] for row in cur_sessions]
+    return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles, sessions_disponibles=sessions_disponibles)
 
 
 
