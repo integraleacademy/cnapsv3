@@ -30,7 +30,6 @@ def init_db():
 
 
 
-
 @app.route("/")
 def index():
     filtre_cnaps = request.args.get('filtre_cnaps', 'Tous')
@@ -47,11 +46,15 @@ def index():
             cur = conn.execute("SELECT * FROM dossiers")
         dossiers = cur.fetchall()
 
-        # CHARGER LES SESSIONS ICI
         sessions = conn.execute("SELECT * FROM sessions ORDER BY date_debut DESC").fetchall()
 
-    return render_template("index.html", dossiers=dossiers, sessions=sessions, statuts=statuts_disponibles, submitted=request.args.get("submitted"))
-)
+    return render_template(
+        "index.html",
+        dossiers=dossiers,
+        sessions=sessions,
+        statuts=statuts_disponibles,
+        submitted=request.args.get("submitted")
+    )
 
 
 
@@ -291,29 +294,3 @@ def modifier_statut_cnaps(id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (statut_cnaps, id))
     return redirect("/")
-
-
-@app.route("/admin/sessions", methods=["GET", "POST"])
-def sessions():
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.row_factory = sqlite3.Row
-        if request.method == "POST":
-            type_formation = request.form.get("type")
-            nom = request.form.get("nom")
-            date_debut = request.form.get("date_debut")
-            date_fin = request.form.get("date_fin")
-            if type_formation and nom and date_debut:
-                conn.execute("INSERT INTO sessions (type, nom, date_debut, date_fin) VALUES (?, ?, ?, ?)",
-                             (type_formation, nom, date_debut, date_fin))
-                conn.commit()
-            return redirect("/admin/sessions")
-
-        sessions = conn.execute("SELECT * FROM sessions ORDER BY date_debut DESC").fetchall()
-    return render_template("sessions.html", sessions=sessions)
-
-
-@app.route("/admin/sessions/delete/<int:id>")
-def delete_session(id):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("DELETE FROM sessions WHERE id=?", (id,))
-    return redirect("/admin/sessions")
