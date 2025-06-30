@@ -1,3 +1,17 @@
+
+def init_sessions():
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT,
+                nom TEXT,
+                date_debut TEXT,
+                date_fin TEXT
+            )
+        """)
+
+
 import unicodedata
 import uuid
 
@@ -12,7 +26,8 @@ app = Flask(__name__)
 app.secret_key = "cnaps_clé_ultra_secrète_42"
 DB_NAME = "cnaps.db"
 
-def init_db():
+def init_db()
+    init_sessions():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dossiers (
@@ -149,6 +164,7 @@ def update_date(id):
 
 if __name__ == "__main__":
     init_db()
+    init_sessions()
     port = int(os.environ.get("PORT", 10000))
     app.run(debug=True, host="0.0.0.0", port=port)
 
