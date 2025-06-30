@@ -108,11 +108,11 @@ def attestation(id):
     if formation == "A3P":
         doc.add_paragraph("Libellé exact de la formation : AGENT DE PROTECTION PHYSIQUE DES PERSONNES (A3P)")
         doc.add_paragraph("Numéro d'enregistrement RNCP : 35098")
-        doc.add_paragraph("Nature de la formation : Titre à Finalité Professionnelle (TFP) Agent de Protection Physique des Personnes - Agrément de la CPNEFP n°8320111201 en date du 02/02/2021")
+        doc.add_paragraph("Nature de la formation : Titre à Finalité Professionnelle (TFP) Agent de Protection Physique des Personnes - Agrément de la CPNEFP n°8320111201 en date du 27/06/2025 (valable jusqu'au 27/06/2028)")
     else:
         doc.add_paragraph("Libellé exact de la formation : AGENT DE PREVENTION ET DE SECURITE (APS)")
         doc.add_paragraph("Numéro d'enregistrement RNCP : 34054")
-        doc.add_paragraph("Nature de la formation : Titre à Finalité Professionnelle (TFP) Agent de Prévention et de Sécurité - Agrément de la CPNEFP n°8320032701 en date du 30/11/2020")
+        doc.add_paragraph("Nature de la formation : Titre à Finalité Professionnelle (TFP) Agent de Prévention et de Sécurité - Agrément de la CPNEFP n°8320032701 en date du 23/06/2025 (valable jusqu'au 23/06/2028)")
 
     doc.add_paragraph(f"Dates de la formation : {session} qui se déroulera à Puget sur Argens (83480).")
     doc.add_paragraph("Lieu(x) de réalisation de la formation : Intégrale Sécurité Formations - 54 chemin du Carreou - 83480 PUGET SUR ARGENS")
