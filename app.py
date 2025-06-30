@@ -26,7 +26,7 @@ app = Flask(__name__)
 app.secret_key = "cnaps_clé_ultra_secrète_42"
 DB_NAME = "cnaps.db"
 
-def init_db()
+def init_db():
     init_sessions():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
