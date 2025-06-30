@@ -100,8 +100,7 @@ def attestation(id):
     doc.add_paragraph("Responsable de l'organisme de formation : INTEGRALE SECURITE FORMATIONS")
     doc.add_paragraph("Numéro d'enregistrement DIRECCTE : 93830600283")
     doc.add_paragraph("Autorisé à exercer par le CNAPS sous le numéro : FOR-083-2027-02-08-20220755135")
-    doc.add_paragraph("Téléphone : 04 22 47 07 68")
-    doc.add_paragraph("Adresse électronique : integralesecuriteformations@gmail.com")
+    doc.add_paragraph("Contact : 04 22 47 07 68 – integralesecuriteformations@gmail.com")
     doc.add_paragraph(f"Certifie que Monsieur / Madame : {nom} {prenom}")
     doc.add_paragraph("est préinscrit(e) à la formation qualifiante ci-dessous :")
 
@@ -167,7 +166,7 @@ def ajouter_session():
         date_debut = request.form.get("date_debut")
         date_fin = request.form.get("date_fin")
 
-        conn = sqlite3.connect("/data/cnaps.db")
+        conn = sqlite3.connect("cnaps.db")
         c = conn.cursor()
         c.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -189,7 +188,7 @@ def ajouter_session():
         nom_session = request.form.get("nom_session")
         date_session = request.form.get("date_session")
 
-        conn = sqlite3.connect("/data/cnaps.db")
+        conn = sqlite3.connect("cnaps.db")
         c = conn.cursor()
         c.execute("CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, date TEXT)")
         c.execute("INSERT INTO sessions (nom, date) VALUES (?, ?)", (nom_session, date_session))
