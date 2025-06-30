@@ -311,3 +311,13 @@ def download_db():
         return send_file("data/cnaps.db", as_attachment=True)
     except Exception as e:
         return f"⚠️ Erreur lors du téléchargement : {e}"
+
+@app.route("/debug_disk")
+def debug_disk():
+    import os
+    try:
+        files = os.listdir("/mnt/data")
+        return "<br>".join(files) if files else "Le dossier /mnt/data est vide"
+    except Exception as e:
+        return f"Erreur : {e}"
+
