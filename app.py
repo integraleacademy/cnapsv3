@@ -12,7 +12,7 @@ def get_stagiaire_by_id(id):
     conn.row_factory = sqlite3.Row
     stagiaire = conn.execute("SELECT * FROM dossiers WHERE id = ?", (id,)).fetchone()
     conn.close()
-    return stagiaire
+        return stagiaire
 
 
 @app.route("/")
@@ -33,7 +33,7 @@ def index():
             cur = conn.execute("SELECT * FROM dossiers")
         dossiers = cur.fetchall()
 
-    return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
+        return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
 
 
 @app.route('/attestation/<int:id>')
@@ -53,18 +53,18 @@ def attestation_pdf(id):
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire["nom"]}.pdf'
-    return response
+        return response
 
 from flask import send_file, request, redirect, url_for, flash
 import json
 
-    except Exception as e:
+        except Exception as e:
         return str(e), 500
 
         else:
-            flash('Fichier invalide.')
-            return redirect(url_for('import_data'))
-    return '''
+        flash('Fichier invalide.')
+        return redirect(url_for('import_data'))
+        return '''
         <!doctype html>
         <title>Importer données</title>
         <h1>Importer un fichier JSON</h1>
@@ -80,7 +80,7 @@ def changer_statut_cnaps(id):
     new_statut = request.form.get('statut_cnaps')
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE stagiaires SET statut_cnaps = ? WHERE id = ?", (new_statut, id))
-    return redirect(url_for('accueil'))
+        return redirect(url_for('accueil'))
 
 
 import sqlite3
@@ -101,7 +101,7 @@ def export_data():
             json.dump(data_list, f, ensure_ascii=False, indent=2)
 
         return send_file('data.json', as_attachment=True)
-    except Exception as e:
+        except Exception as e:
         return str(e), 500
 
 @app.route('/import', methods=['GET', 'POST'])
@@ -127,15 +127,15 @@ def import_data():
                             entry.get('statut_cnaps', ''),
                             entry.get('commentaire', '')
                         ))
-                flash('Import réussi.')
-            except Exception as e:
-                flash(f'Erreur lors de l'import : {e}')
-            return redirect(url_for('accueil'))
+        flash('Import réussi.')
+        except Exception as e:
+        flash(f'Erreur lors de l'import : {e}')
+        return redirect(url_for('accueil'))
         else:
-            flash('Fichier invalide.')
-            return redirect(url_for('import_data'))
+        flash('Fichier invalide.')
+        return redirect(url_for('import_data'))
 
-    return render_template_string('''
+        return render_template_string('''
         <!doctype html>
         <title>Importer données</title>
         <h1>Importer un fichier JSON</h1>
