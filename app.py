@@ -85,3 +85,75 @@ def import_data():
           <input type=submit value=Importer>
         </form>
     '''
+
+
+@app.route('/statut_cnaps/<int:id>', methods=['POST'])
+def changer_statut_cnaps(id):
+    new_statut = request.form.get('statut_cnaps')
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE stagiaires SET statut_cnaps = ? WHERE id = ?", (new_statut, id))
+    return redirect(url_for('accueil'))
+
+
+import sqlite3
+import json
+from flask import send_file, request, redirect, url_for, flash, render_template_string
+
+DB_NAME = "cnaps.db"
+
+@app.route('/export')
+def export_data():
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.row_factory = sqlite3.Row
+            data = conn.execute("SELECT * FROM stagiaires").fetchall()
+            data_list = [dict(row) for row in data]
+
+        with open('data.json', 'w', encoding='utf-8') as f:
+            json.dump(data_list, f, ensure_ascii=False, indent=2)
+
+        return send_file('data.json', as_attachment=True)
+    except Exception as e:
+        return str(e), 500
+
+@app.route('/import', methods=['GET', 'POST'])
+def import_data():
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if file and file.filename.endswith('.json'):
+            try:
+                data = json.load(file)
+                with sqlite3.connect(DB_NAME) as conn:
+                    conn.execute("DELETE FROM stagiaires")
+                    for entry in data:
+                        conn.execute('''
+                            INSERT INTO stagiaires (nom, prenom, email, formation, session, statut_dossier, statut_cnaps, commentaire)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            entry.get('nom', ''),
+                            entry.get('prenom', ''),
+                            entry.get('email', ''),
+                            entry.get('formation', ''),
+                            entry.get('session', ''),
+                            entry.get('statut_dossier', ''),
+                            entry.get('statut_cnaps', ''),
+                            entry.get('commentaire', '')
+                        ))
+                flash('Import réussi.')
+            except Exception as e:
+                flash(f'Erreur lors de l'import : {e}')
+            return redirect(url_for('accueil'))
+        else:
+            flash('Fichier invalide.')
+            return redirect(url_for('import_data'))
+
+    return render_template_string('''
+        <!doctype html>
+        <title>Importer données</title>
+        <h1>Importer un fichier JSON</h1>
+        <form method=post enctype=multipart/form-data>
+          <input type=file name=file required>
+          <input type=submit value=Importer>
+        </form>
+        <p><a href="/">Retour à l'accueil</a></p>
+    ''')
