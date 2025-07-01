@@ -141,7 +141,7 @@ def import_data():
                         ))
                 flash('Import réussi.')
             except Exception as e:
-                flash(f'Erreur lors de l'import : {e}')
+                flash(f"Erreur lors de l'import : {e}")
             return redirect(url_for('accueil'))
         else:
             flash('Fichier invalide.')
