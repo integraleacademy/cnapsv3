@@ -12,7 +12,7 @@ def get_stagiaire_by_id(id):
     conn.row_factory = sqlite3.Row
     stagiaire = conn.execute("SELECT * FROM dossiers WHERE id = ?", (id,)).fetchone()
     conn.close()
-        return stagiaire
+    return stagiaire
 
 
 @app.route("/")
