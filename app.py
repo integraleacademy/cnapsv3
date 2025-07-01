@@ -54,7 +54,7 @@ def export_data():
     try:
         with sqlite3.connect(DB_NAME) as conn:
             conn.row_factory = sqlite3.Row
-            data = conn.execute("SELECT * FROM stagiaires").fetchall()
+            data = conn.execute("SELECT * FROM dossiers").fetchall()
             data_list = [dict(row) for row in data]
         with open('data.json', 'w', encoding='utf-8') as f:
             json.dump(data_list, f, ensure_ascii=False, indent=2)
@@ -71,9 +71,9 @@ def import_data():
             try:
                 data = json.load(file)
                 with sqlite3.connect(DB_NAME) as conn:
-                    conn.execute("DELETE FROM stagiaires")
+                    conn.execute("DELETE FROM dossiers")
                     for entry in data:
-                        conn.execute("""INSERT INTO stagiaires (nom, prenom, email, formation, session, statut_dossier, statut_cnaps, commentaire)
+                        conn.execute("""INSERT INTO dossiers (nom, prenom, email, formation, session, statut_dossier, statut_cnaps, commentaire)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (
                             entry.get('nom', ''),
                             entry.get('prenom', ''),
@@ -108,5 +108,5 @@ def import_data():
 def changer_statut_cnaps(id):
     new_statut = request.form.get('statut_cnaps')
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("UPDATE stagiaires SET statut_cnaps = ? WHERE id = ?", (new_statut, id))
+        conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (new_statut, id))
     return redirect(url_for('index'))
