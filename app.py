@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, make_response, Response
 from weasyprint import HTML
-from werkzeug.utils import secure_filename
 import sqlite3
 import os
 import io
@@ -88,7 +87,7 @@ def attestation_pdf(id):
     pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire['nom']}.pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire["nom"]}.pdf'
     return response
 
 @app.route("/export")
@@ -99,13 +98,22 @@ def export_csv():
         rows = cur.fetchall()
 
     def generate():
-        headers = ["ID", "Nom", "Prénom", "Formation", "Session", "Lien", "Statut dossier", "Commentaire", "Statut CNAPS"]
+        headers = ["Nom", "Prénom", "Formation", "Session", "Lien", "Statut", "Commentaire", "Statut CNAPS"]
         yield ",".join(headers) + "\n"
         for row in rows:
-            ligne = [str(row[col]) if row[col] is not None else "" for col in row.keys()]
-            yield ",".join(ligne) + "\n"
+            ligne = [
+                row["nom"],
+                row["prenom"],
+                row["formation"],
+                row["session"],
+                row["lien"] or "",
+                row["statut"] or "",
+                row["commentaire"] or "",
+                row["statut_cnaps"] or ""
+            ]
+            yield ",".join([str(item).replace(",", " ") for item in ligne]) + "\n"
 
-    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment;filename=dossiers_cnaps.csv"})
+    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=dossiers_cnaps.csv"})
 
 @app.route("/import", methods=["GET", "POST"])
 def import_csv():
@@ -121,17 +129,22 @@ def import_csv():
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute("DELETE FROM dossiers")  # supprime tout
             for row in reader:
-                if len(row) < 6:
+                if len(row) < 8:
                     continue
-                nom, prenom, formation, session, lien, statut = row[1:7]
-                commentaire = row[7] if len(row) > 7 else ""
-                statut_cnaps = row[8] if len(row) > 8 else ""
+                nom = row[0]
+                prenom = row[1]
+                formation = row[2]
+                session = row[3]
+                lien = row[4]
+                statut = row[5]
+                commentaire = row[6]
+                statut_cnaps = row[7]
                 conn.execute(
                     "INSERT INTO dossiers (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
                 )
         return redirect("/")
-    
+
     return '''
         <h2>Importer un fichier CSV (Remplace tous les dossiers existants)</h2>
         <form method="POST" enctype="multipart/form-data">
