@@ -110,3 +110,27 @@ def changer_statut_cnaps(id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (new_statut, id))
     return redirect(url_for('index'))
+
+
+@app.route('/statut/<int:id>/<string:new_statut>')
+def changer_statut_dossier(id, new_statut):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET statut_dossier = ? WHERE id = ?", (new_statut, id))
+    return redirect(url_for('index'))
+
+@app.route('/commentaire/<int:id>', methods=['POST'])
+def modifier_commentaire(id):
+    new_commentaire = request.form.get('commentaire')
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (new_commentaire, id))
+    return redirect(url_for('index'))
+
+@app.route('/edit/<int:id>', methods=['POST'])
+def modifier_dossier(id):
+    new_nom = request.form.get('nom')
+    new_prenom = request.form.get('prenom')
+    new_statut_cnaps = request.form.get('statut_cnaps')
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET nom = ?, prenom = ?, statut_cnaps = ? WHERE id = ?", 
+                     (new_nom, new_prenom, new_statut_cnaps, id))
+    return redirect(url_for('index'))
