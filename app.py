@@ -88,7 +88,7 @@ def attestation_pdf(id):
     pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire["nom"]}.pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire['nom']}.pdf'
     return response
 
 @app.route("/export")
@@ -116,9 +116,10 @@ def import_csv():
 
         stream = io.StringIO(file.stream.read().decode("utf-8"))
         reader = csv.reader(stream)
-        headers = next(reader)
+        headers = next(reader)  # saute les en-têtes
 
         with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("DELETE FROM dossiers")  # supprime tout
             for row in reader:
                 if len(row) < 6:
                     continue
@@ -130,8 +131,9 @@ def import_csv():
                     (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
                 )
         return redirect("/")
+    
     return '''
-        <h2>Importer un fichier CSV</h2>
+        <h2>Importer un fichier CSV (Remplace tous les dossiers existants)</h2>
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="file" accept=".csv" required>
             <button type="submit">Importer</button>
