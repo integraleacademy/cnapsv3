@@ -6,6 +6,7 @@ import os
 import json
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev')
 DB_NAME = "cnaps.db"
 
 # Fonction utilitaire pour récupérer un stagiaire
@@ -73,12 +74,11 @@ def import_data():
                 with sqlite3.connect(DB_NAME) as conn:
                     conn.execute("DELETE FROM dossiers")
                     for entry in data:
-                        conn.execute("""INSERT INTO dossiers (nom, prenom, email, formation, session, statut_dossier, statut_cnaps, commentaire)
+                        conn.execute("""INSERT INTO dossiers (nom, prenom, formation, session, statut_dossier, statut_cnaps, commentaire)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (
                             entry.get('nom', ''),
                             entry.get('prenom', ''),
-                            entry.get('email', ''),
-                            entry.get('formation', ''),
+                                                        entry.get('formation', ''),
                             entry.get('session', ''),
                             entry.get('statut_dossier', ''),
                             entry.get('statut_cnaps', ''),
