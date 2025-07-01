@@ -58,21 +58,9 @@ def attestation_pdf(id):
 from flask import send_file, request, redirect, url_for, flash
 import json
 
-@app.route('/export')
-def export_data():
-    try:
-        return send_file('data.json', as_attachment=True)
     except Exception as e:
         return str(e), 500
 
-@app.route('/import', methods=['GET', 'POST'])
-def import_data():
-    if request.method == 'POST':
-        file = request.files.get('file')
-        if file and file.filename.endswith('.json'):
-            file.save('data.json')
-            flash('Import réussi.')
-            return redirect(url_for('accueil'))
         else:
             flash('Fichier invalide.')
             return redirect(url_for('import_data'))
@@ -141,7 +129,7 @@ def import_data():
                         ))
                 flash('Import réussi.')
             except Exception as e:
-                flash(f"Erreur lors de l'import : {e}")
+                flash(f'Erreur lors de l'import : {e}')
             return redirect(url_for('accueil'))
         else:
             flash('Fichier invalide.')
