@@ -35,7 +35,9 @@ def add():
     prenom = request.form["prenom"]
     formation = request.form["formation"]
     session = request.form["session"]
-    lien = request.form["lien"]
+    lien = request.form["lien"].strip()
+    if lien.count("-") >= 3 and len(lien) > 20:
+        lien = f"https://teleservices-cnaps.interieur.gouv.fr/teleservices/ihm/#/dossier/fiche/%7B%22dossier%22%3A%22{lien}%22%2C%22table%22%3A%22dossier%22%7D"
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("INSERT INTO dossiers (nom, prenom, formation, session, lien, statut) VALUES (?, ?, ?, ?, ?, ?)",
                      (nom, prenom, formation, session, lien, "INCOMPLET"))
@@ -43,7 +45,9 @@ def add():
 
 @app.route("/edit/<int:id>", methods=["POST"])
 def edit(id):
-    lien = request.form.get("lien", "")
+    lien = request.form.get("lien", "").strip()
+    if lien.count("-") >= 3 and len(lien) > 20:
+        lien = f"https://teleservices-cnaps.interieur.gouv.fr/teleservices/ihm/#/dossier/fiche/%7B%22dossier%22%3A%22{lien}%22%2C%22table%22%3A%22dossier%22%7D"
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET lien = ? WHERE id = ?", (lien, id))
     return redirect("/")
@@ -124,10 +128,10 @@ def import_csv():
 
         stream = io.StringIO(file.stream.read().decode("utf-8"))
         reader = csv.reader(stream)
-        headers = next(reader)  # saute les en-têtes
+        headers = next(reader)
 
         with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("DELETE FROM dossiers")  # supprime tout
+            conn.execute("DELETE FROM dossiers")
             for row in reader:
                 if len(row) < 8:
                     continue
@@ -135,7 +139,9 @@ def import_csv():
                 prenom = row[1]
                 formation = row[2]
                 session = row[3]
-                lien = row[4]
+                lien = row[4].strip()
+                if lien.count("-") >= 3 and len(lien) > 20:
+                    lien = f"https://teleservices-cnaps.interieur.gouv.fr/teleservices/ihm/#/dossier/fiche/%7B%22dossier%22%3A%22{lien}%22%2C%22table%22%3A%22dossier%22%7D"
                 statut = row[5]
                 commentaire = row[6]
                 statut_cnaps = row[7]
@@ -146,7 +152,7 @@ def import_csv():
         return redirect("/")
 
     return '''
-        <h2>Importer un fichier CSV (Remplace tous les dossiers existants)</h2>
+        <h2>Importer un fichier CSV (Numéros CNAPS convertis automatiquement en liens)</h2>
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="file" accept=".csv" required>
             <button type="submit">Importer</button>
