@@ -41,6 +41,11 @@
    .statut-docsmanquants {
         background-color: red ; color: white; font-weight: bold;
     }
+	
+    }
+   .statut-decision {
+        background-color: purple ; color: white; font-weight: bold;
+    }
 </style>
 
 <style>
@@ -158,6 +163,7 @@
                     {% elif dossier[8] == 'ACCEPTÉ' %}statut-accepte
                     {% elif dossier[8] == 'REFUSÉ' %}statut-refuse
 		    {% elif dossier[8] == 'DOCS COMPLEMENTAIRES' %}statut-docsmanquants
+	            {% elif dossier[8] == 'DECISION EN COURS' %}statut-decision
                     {% else %}statut-default{% endif %}">
             <option value="">--</option>
             <option value="TRANSMIS" {% if dossier[8] == "TRANSMIS" %}selected{% endif %}>TRANSMIS</option>
@@ -166,6 +172,7 @@
             <option value="ACCEPTÉ" {% if dossier[8] == "ACCEPTÉ" %}selected{% endif %}>ACCEPTÉ</option>
             <option value="REFUSÉ" {% if dossier[8] == "REFUSÉ" %}selected{% endif %}>REFUSÉ</option>
             <option value="DOCS COMPLEMENTAIRES" {% if dossier[8] == "DOCS COMPLEMENTAIRES" %}selected{% endif %}>DOCS COMPLEMENTAIRES</option>
+            <option value="DECISION EN COURS" {% if dossier[8] == "DECISION EN COURS" %}selected{% endif %}>DECISION EN COURS</option>
         </select>
         <button type="submit">💾</button>
     </form>
