@@ -30,7 +30,7 @@ def index():
         if filtre_cnaps != 'Tous':
             cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=?", (filtre_cnaps,))
         else:
-            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # ✅ Tri par ID décroissant
+            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # ✅ Tri des plus récents
         dossiers = cur.fetchall()
     return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
 
@@ -79,40 +79,66 @@ def update_statut_cnaps(id):
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
     return redirect("/")
 
-@app.route("/attestation/<int:id>")
-def attestation(id):
+@app.route('/attestation/<int:id>')
+def attestation_pdf(id):
     stagiaire = get_stagiaire_by_id(id)
-    rendered = render_template("attestation_aps.html", stagiaire=stagiaire)
-    pdf = HTML(string=rendered, base_url=request.host_url).write_pdf()  # ✅ base_url ajouté
+    if not stagiaire:
+        return "Stagiaire introuvable", 404
+    formation = stagiaire["formation"]
+    if formation not in ["APS", "A3P"]:
+        return "Type de formation non pris en charge", 400
+    template_name = f"attestation_{formation.lower()}.html"
+    html = render_template(template_name, stagiaire=stagiaire)
+    pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()  # ✅ Signature fonctionnelle
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=attestation_{id}.pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=attestation_{formation}_{stagiaire["nom"]}.pdf'
     return response
 
 @app.route("/export")
 def export_csv():
+    si = StringIO()
+    writer = csv.writer(si)
     with sqlite3.connect(DB_NAME) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute("SELECT * FROM dossiers").fetchall()
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(rows[0].keys())
-    for row in rows:
-        writer.writerow([row[key] for key in row.keys()])
-    output.seek(0)
-    return send_file(StringIO(output.getvalue()), mimetype='text/csv', download_name='export.csv', as_attachment=True)
+        cur = conn.execute("SELECT id, nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps FROM dossiers")
+        writer.writerow([col[0] for col in cur.description])
+        writer.writerows(cur.fetchall())
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = "attachment; filename=export_cnaps.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
 
 @app.route("/import", methods=["GET", "POST"])
-def importer():
+def import_csv():
     if request.method == "POST":
-        file = request.files["fichier_csv"]
+        file = request.files["file"]
         if file:
-            content = file.stream.read().decode("utf-8")
-            reader = csv.reader(StringIO(content))
-            headers = next(reader)
+            stream = StringIO(file.stream.read().decode("utf-8"))
+            reader = csv.DictReader(stream)
             with sqlite3.connect(DB_NAME) as conn:
+                conn.execute("DELETE FROM dossiers")  # On remplace tout
                 for row in reader:
-                    conn.execute("INSERT INTO dossiers (id, nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                 row)
+                    conn.execute("""
+                        INSERT INTO dossiers (id, nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        row.get("id"),
+                        row.get("nom"),
+                        row.get("prenom"),
+                        row.get("formation"),
+                        row.get("session"),
+                        row.get("lien"),
+                        row.get("statut"),
+                        row.get("commentaire"),
+                        row.get("statut_cnaps"),
+                    ))
         return redirect("/")
-    return render_template("importer.html")
+    return '''
+    <!doctype html>
+    <title>Importer CSV</title>
+    <h1>Importer un fichier CSV</h1>
+    <form action="/import" method=post enctype=multipart/form-data>
+    <input type=file name=file>
+    <input type=submit value=Importer>
+    </form>
+    '''
