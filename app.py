@@ -30,7 +30,7 @@ def index():
         if filtre_cnaps != 'Tous':
             cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=?", (filtre_cnaps,))
         else:
-            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # 🔽 Tri décroissant
+            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # ✅ Tri par ID décroissant
         dossiers = cur.fetchall()
     return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
 
@@ -83,7 +83,7 @@ def update_statut_cnaps(id):
 def attestation(id):
     stagiaire = get_stagiaire_by_id(id)
     rendered = render_template("attestation_aps.html", stagiaire=stagiaire)
-    pdf = HTML(string=rendered).write_pdf()
+    pdf = HTML(string=rendered, base_url=request.host_url).write_pdf()  # ✅ base_url ajouté
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=attestation_{id}.pdf'
