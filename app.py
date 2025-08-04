@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, make_response, send_file
+from flask import Flask, render_template, request, redirect, make_response, send_file, url_for
 from weasyprint import HTML
 import sqlite3
 import os
@@ -30,7 +30,7 @@ def index():
         if filtre_cnaps != 'Tous':
             cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=? ORDER BY id DESC", (filtre_cnaps,))
         else:
-            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # <-- ligne modifiée
+            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # tri du plus récent au plus ancien
         dossiers = cur.fetchall()
     return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
 
@@ -100,3 +100,16 @@ def generate_pdf(id):
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=attestation_{id}.pdf'
     return response
+
+@app.route("/commentaire/<int:id>", methods=["POST"])
+def commentaire(id):
+    commentaire = request.form.get("commentaire", "")
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (commentaire, id))
+    return redirect("/")
+
+@app.route("/statut/<int:id>/<valeur>")
+def modifier_statut_cnaps(id, valeur):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (valeur, id))
+    return redirect("/")
