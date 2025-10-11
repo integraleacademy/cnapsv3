@@ -142,3 +142,27 @@ def import_csv():
     <input type=submit value=Importer>
     </form>
     '''
+
+# ------------------------------------------------------------
+# ✅ Route publique pour le suivi sur la plateforme principale
+# ------------------------------------------------------------
+@app.route("/data.json")
+def data_json():
+    """Retourne le nombre de dossiers en instruction pour le suivi CNAPS"""
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cur = conn.execute("SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'")
+            count = cur.fetchone()[0]
+
+        headers = {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        }
+        return {"instruction": count}, 200, headers
+
+    except Exception as e:
+        print("⚠️ Erreur data.json:", e)
+        return {"instruction": -1, "error": str(e)}, 500, {
+            "Access-Control-Allow-Origin": "*"
+        }
+
