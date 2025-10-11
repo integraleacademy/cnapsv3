@@ -195,3 +195,48 @@ def data_json():
             "Access-Control-Allow-Origin": "*"
         }
 
+# --- à mettre en bas de l'app cnapsv3 (après les autres routes) ---
+from datetime import datetime, timedelta
+
+@app.route("/recent_acceptes.json")
+def recent_acceptes_json():
+    """Retourne les dossiers ACCEPTES sur 7 jours (nom, prénom, session)."""
+    try:
+        seven = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # 1) Filtre sur 7 jours si 'session' est une date ISO (SQLite date() la comprend)
+            rows = conn.execute("""
+                SELECT nom, prenom, session
+                FROM dossiers
+                WHERE statut_cnaps = 'ACCEPTE'
+                  AND (
+                        (session GLOB '____-__-__' AND date(session) >= date(?))
+                       )
+                ORDER BY session DESC
+                LIMIT 50
+            """, (seven,)).fetchall()
+
+            # 2) Fallback si aucune date exploitable : on prend les 10 derniers ACCEPTES
+            if not rows:
+                rows = conn.execute("""
+                    SELECT nom, prenom, session
+                    FROM dossiers
+                    WHERE statut_cnaps = 'ACCEPTE'
+                    ORDER BY id DESC
+                    LIMIT 10
+                """).fetchall()
+
+        data = [dict(r) for r in rows]
+        headers = {"Content-Type": "application/json",
+                   "Access-Control-Allow-Origin": "*"}
+        return {"recent_acceptes": data}, 200, headers
+
+    except Exception as e:
+        print("⚠️ Erreur /recent_acceptes.json :", e)
+        return {"recent_acceptes": [], "error": str(e)}, 500, {
+            "Access-Control-Allow-Origin": "*"
+        }
+
+
