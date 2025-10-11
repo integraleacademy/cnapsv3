@@ -200,16 +200,16 @@ from datetime import datetime, timedelta
 
 @app.route("/recent_acceptes.json")
 def recent_acceptes_json():
-    """Retourne les derniers dossiers ACCEPTES (sans filtre de date)."""
+    """Retourne les 10 derniers dossiers ACCEPTES (insensible à la casse/accents)."""
     try:
         with sqlite3.connect(DB_NAME) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT nom, prenom, session
                 FROM dossiers
-                WHERE statut_cnaps = 'ACCEPTE'
+                WHERE LOWER(REPLACE(statut_cnaps, 'é', 'e')) = 'accepte'
                 ORDER BY id DESC
-                LIMIT 20
+                LIMIT 10
             """).fetchall()
 
         data = [dict(r) for r in rows]
