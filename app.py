@@ -5,6 +5,8 @@ import os
 import shutil
 import csv
 from io import StringIO
+from datetime import datetime, timedelta
+
 
 # Copier l’ancienne base si elle existe encore localement
 if os.path.exists("cnaps.db") and not os.path.exists("/mnt/data/cnaps.db"):
@@ -25,14 +27,41 @@ def index():
     filtre_cnaps = request.args.get('filtre_cnaps', 'Tous')
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
+
+        # Liste des statuts disponibles
         cur_statuts = conn.execute("SELECT DISTINCT statut_cnaps FROM dossiers")
         statuts_disponibles = sorted([row['statut_cnaps'] for row in cur_statuts if row['statut_cnaps']])
+
+        # Dossiers filtrés selon statut
         if filtre_cnaps != 'Tous':
-            cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=?", (filtre_cnaps,))
+            cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=? ORDER BY id DESC", (filtre_cnaps,))
         else:
-            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")  # ✅ Tri des plus récents
+            cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")
         dossiers = cur.fetchall()
-    return render_template("index.html", dossiers=dossiers, filtre_cnaps=filtre_cnaps, statuts_disponibles=statuts_disponibles)
+
+        # ✅ Dossiers acceptés dans les 7 derniers jours
+        sept_jours = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        cur_acceptes = conn.execute("""
+            SELECT nom, prenom, session
+            FROM dossiers
+            WHERE statut_cnaps = 'ACCEPTE'
+            AND (
+                session >= ? 
+                OR date(session) >= date(?)
+                OR date(lien) >= date(?)  -- si jamais la date est stockée ailleurs
+            )
+            ORDER BY session DESC
+        """, (sept_jours, sept_jours, sept_jours))
+        recent_acceptes = cur_acceptes.fetchall()
+
+    return render_template(
+        "index.html",
+        dossiers=dossiers,
+        recent_acceptes=recent_acceptes,
+        filtre_cnaps=filtre_cnaps,
+        statuts_disponibles=statuts_disponibles
+    )
+
 
 @app.route("/add", methods=["POST"])
 def add():
