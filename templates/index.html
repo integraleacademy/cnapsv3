@@ -201,21 +201,30 @@
 </form>
 
 
-  <script>
-    function updateSessions() {
-      var formation = document.getElementById("formation").value;
-      var session = document.getElementById("session");
-      session.innerHTML = "";
+<script>
+  function updateSessions() {
+    var formation = document.getElementById("formation").value;
+    var session = document.getElementById("session");
+    session.innerHTML = "";
 
-      if (formation === "APS") {
-        session.add(new Option("8 septembre au 10 cotobre 2025", "8 septembre au 10 octobre 2025"));
-        session.add(new Option("3 novembre au 5 décembre 2025", "3 novembre au 5 décembre 2025"));
-      } else if (formation === "A3P") {
-        session.add(new Option("14 octobre au 19 décembre 2025", "14 octobre au 19 décembre 2025"));
-		session.add(new Option("5 janvier au 13 mars 2026", "5 janvier au 13 mars 2026"));
-      }
+    if (formation === "APS") {
+      session.add(new Option("Du 5 janvier au 6 février 2026", "Du 5 janvier au 6 février 2026"));
+      session.add(new Option("Du 23 mars au 27 avril 2026", "Du 23 mars au 27 avril 2026"));
+      session.add(new Option("Du 26 mai au 29 juin 2026", "Du 26 mai au 29 juin 2026"));
+      session.add(new Option("Du 8 juillet au 12 août 2026", "Du 8 juillet au 12 août 2026"));
+      session.add(new Option("Du 7 septembre au 9 octobre 2026", "Du 7 septembre au 9 octobre 2026"));
+      session.add(new Option("Du 3 novembre au 8 décembre 2026", "Du 3 novembre au 8 décembre 2026"));
+    } else if (formation === "A3P") {
+      session.add(new Option("Du 14 octobre au 9 décembre 2025", "Du 14 octobre au 9 décembre 2025"));
+      session.add(new Option("Du 5 janvier au 16 mars 2026", "Du 5 janvier au 16 mars 2026"));
+      session.add(new Option("Du 30 mars au 2 juin 2026", "Du 30 mars au 2 juin 2026"));
+      session.add(new Option("Du 8 juin au 4 août 2026", "Du 8 juin au 4 août 2026"));
+      session.add(new Option("Du 1er septembre au 27 octobre 2026", "Du 1er septembre au 27 octobre 2026"));
+      session.add(new Option("Du 9 novembre 2026 au 19 janvier 2027", "Du 9 novembre 2026 au 19 janvier 2027"));
     }
-  </script>
+  }
+</script>
+
 
 <script>
 function filterTable() {
