@@ -61,9 +61,11 @@
         z-index: 10;
     }
 
-    header img {
-        height: 70px;
-    }
+   header img {
+    height: 120px;
+    width: auto;
+}
+
 
     header h1 {
         margin: 0;
@@ -220,6 +222,43 @@
         border: 1px solid var(--border);
         font-size: 15px;
     }
+
+/* Select CNAPS – version finale fusionnée */
+td form select {
+    height: 48px !important;
+    padding: 0 14px !important;
+    padding-right: 40px !important;  /* espace flèche */
+    font-size: 15px !important;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+
+    background-position: right 12px center;
+    background-repeat: no-repeat;
+    background-size: 14px;
+}
+
+
+
+/* Empêche les couleurs CNAPS d’être écrasées */
+.statut-transmis,
+.statut-enregistre,
+.statut-instruction,
+.statut-accepte,
+.statut-refuse,
+.statut-default,
+.statut-docsmanquants {
+    height: 48px !important;
+    display: flex;
+    align-items: center;
+}
+	
+		
 </style>
 
 
