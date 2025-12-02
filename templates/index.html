@@ -350,27 +350,28 @@ td form select {
                 <td>{{ dossier[4] }}</td> <!-- Session -->
                 
 <td>
-    <form action="/edit/{{ dossier[0] }}" method="post">
-        <input type="text" name="lien" value="{{ dossier[5] or '' }}" placeholder="Modifier lien" />
-        <button type="submit">💾</button>
-    </form>
-    {% if dossier[5] %}
-        <a href="{{ dossier[5] }}" target="_blank">🔗 Voir le lien</a>
-    {% endif %}
-</td>
+   <input type="text"
+       class="lien-input"
+       data-id="{{ dossier[0] }}"
+       value="{{ dossier[5] or '' }}"
+       placeholder="Modifier lien" />
+
+{% if dossier[5] %}
+    <a href="{{ dossier[5] }}" target="_blank">🔗 Voir le lien</a>
+{% endif %}
+
 
                 
 <td>
-    {% if dossier[6] == "COMPLET" %}
-        <a href="/statut/{{ dossier[0] }}/INCOMPLET">
-            <span style="background-color:green;color:white;padding:5px;border-radius:5px;cursor:pointer;">COMPLET</span>
-        </a>
-    {% else %}
-        <a href="/statut/{{ dossier[0] }}/COMPLET">
-            <span style="background-color:orange;color:white;padding:5px;border-radius:5px;cursor:pointer;">INCOMPLET</span>
-        </a>
-    {% endif %}
+    <span class="badge-statut"
+          data-id="{{ dossier[0] }}"
+          data-statut="{{ dossier[6] }}"
+          style="padding:6px 10px;border-radius:6px;color:white;cursor:pointer;
+          background-color: {{ 'green' if dossier[6]=='COMPLET' else 'orange' }}">
+        {{ dossier[6] }}
+    </span>
 </td>
+
 
                 
 
@@ -399,10 +400,11 @@ td form select {
 
 
                 <td>
-                    <form action="/commentaire/{{ dossier[0] }}" method="post">
-                        <textarea name="commentaire" rows="1" cols="20">{{ dossier[7] or '' }}</textarea>
-                        <button type="submit">💾</button>
-                    </form>
+                    <textarea class="commentaire-input"
+          data-id="{{ dossier[0] }}"
+          rows="1"
+          cols="20">{{ dossier[7] or '' }}</textarea>
+
                 </td>
                 <td>
                     <a href="/attestation/{{ dossier[0] }}">📄 Attestation</a><br>
@@ -548,6 +550,76 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
     });
 });
 </script>
+
+	<script>
+document.querySelectorAll(".lien-input").forEach(input => {
+    input.addEventListener("change", () => {
+
+        const id = input.dataset.id;
+        const lien = input.value;
+
+        fetch(`/edit/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lien: lien })
+        }).then(() => {
+            input.style.backgroundColor = "#d4ffd4";  // petit indicateur vert
+            setTimeout(() => input.style.backgroundColor = "", 400);
+        });
+    });
+});
+</script>
+
+	<script>
+document.querySelectorAll(".commentaire-input").forEach(area => {
+    area.addEventListener("blur", () => {
+
+        const id = area.dataset.id;
+        const commentaire = area.value;
+
+        fetch(`/commentaire/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ commentaire: commentaire })
+        }).then(() => {
+            area.style.backgroundColor = "#d4ffd4"; // indicateur succès
+            setTimeout(() => area.style.backgroundColor = "", 400);
+        });
+    });
+});
+</script>
+
+	<script>
+document.querySelectorAll(".badge-statut").forEach(badge => {
+    badge.addEventListener("click", () => {
+
+        const id = badge.dataset.id;
+        const current = badge.dataset.statut;
+        const newStatus = current === "COMPLET" ? "INCOMPLET" : "COMPLET";
+
+        // Enregistrement back-end
+        fetch(`/statut/${id}/${newStatus}`)
+            .then(() => {
+                // Mise à jour instantanée visuelle
+                badge.dataset.statut = newStatus;
+                badge.textContent = newStatus;
+
+                if (newStatus === "COMPLET") {
+                    badge.style.backgroundColor = "green";
+                } else {
+                    badge.style.backgroundColor = "orange";
+                }
+
+                // petit feedback visuel
+                badge.style.opacity = 0.6;
+                setTimeout(() => badge.style.opacity = 1, 200);
+            });
+    });
+});
+</script>
+
+
+
 
 
 	
