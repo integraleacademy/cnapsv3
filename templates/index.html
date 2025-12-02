@@ -506,7 +506,7 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ statut_cnaps: value })
         }).then(() => {
-
+			showCheck();   // 👈 check vert !
             // Petit effet visuel
             select.style.opacity = "0.5";
             setTimeout(() => { select.style.opacity = "1"; }, 300);
@@ -565,6 +565,7 @@ document.querySelectorAll(".lien-input").forEach(input => {
         }).then(() => {
             input.style.backgroundColor = "#d4ffd4";  // petit indicateur vert
             setTimeout(() => input.style.backgroundColor = "", 400);
+			showCheck();
         });
     });
 });
@@ -584,6 +585,7 @@ document.querySelectorAll(".commentaire-input").forEach(area => {
         }).then(() => {
             area.style.backgroundColor = "#d4ffd4"; // indicateur succès
             setTimeout(() => area.style.backgroundColor = "", 400);
+			showCheck();
         });
     });
 });
@@ -600,6 +602,7 @@ document.querySelectorAll(".badge-statut").forEach(badge => {
         // Enregistrement back-end
         fetch(`/statut/${id}/${newStatus}`)
             .then(() => {
+				showCheck();  // 👈 check vert discret !
                 // Mise à jour instantanée visuelle
                 badge.dataset.statut = newStatus;
                 badge.textContent = newStatus;
@@ -618,7 +621,36 @@ document.querySelectorAll(".badge-statut").forEach(badge => {
 });
 </script>
 
+	<script>
+function showCheck() {
+    const box = document.getElementById("autosave-check");
+    if (!box) return;
 
+    box.style.opacity = "1";
+
+    setTimeout(() => {
+        box.style.opacity = "0";
+    }, 1500);
+}
+</script>
+
+
+
+<div id="autosave-check"
+     style="position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: #2ecc71;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            opacity: 0;
+            transition: opacity 0.3s;">
+    ✓ Enregistré
+</div>
 
 
 
