@@ -4,20 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Gestion des dossiers CNAPS Intégrale Academy</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    .header-left { display: flex; align-items: center; }
-    header img { height: 100px; margin-right: 20px; }
-    header h1 { font-size: 24px; margin: 0; }
-    .btn-link { background-color: #4CAF50; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold; }
-    table { width: 100%%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; vertical-align: top; }
-    input, select, button, textarea { margin: 5px 0; padding: 5px; }
-    form.inline { display: inline; }
-    .btn-green { background-color: #4CAF50; color: white; padding: 4px 8px; border: none; border-radius: 4px; }
-    .btn-orange { background-color: #FFA500; color: white; padding: 4px 8px; border: none; border-radius: 4px; }
-  </style>
+
 
 <style>
     .statut-transmis {
@@ -43,21 +30,200 @@
     }
 </style>
 
-<style>
-    body { font-family: Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
-    h1 { text-align: center; margin-top: 20px; }
-    table { border-collapse: collapse; width: 95%; margin: 20px auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    th, td { border: 1px solid #dee2e6; padding: 10px; text-align: center; }
-    th { background-color: #007bff; color: white; }
-    tr:nth-child(even) { background-color: #f2f2f2; }
-    .btn { padding: 6px 12px; margin: 2px; border-radius: 4px; border: none; cursor: pointer; }
-    .btn-danger { background-color: #dc3545; color: white; }
-    .btn-success { background-color: #28a745; color: white; }
-    .btn-secondary { background-color: #6c757d; color: white; }
-    .top-bar { background: #007bff; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-    .logo { height: 50px; }
-    .top-bar a { color: white; text-decoration: none; font-weight: bold; }
+	<style>
+    :root {
+        --primary: #2d6cdf;
+        --background: #f5f6f8;
+        --card: #ffffff;
+        --shadow: rgba(0,0,0,0.06);
+        --radius: 12px;
+        --border: #e4e4e7;
+    }
+
+    body {
+        font-family: "Inter", Arial, sans-serif;
+        background: var(--background);
+        margin: 0;
+        padding: 0;
+        color: #333;
+    }
+
+    /* HEADER */
+    header {
+        background: #fff;
+        padding: 15px 25px;
+        box-shadow: 0 2px 5px var(--shadow);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    header img {
+        height: 70px;
+    }
+
+    header h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+    }
+
+    /* CONTAINER */
+    .container {
+        max-width: 1300px;
+        margin: 25px auto;
+        padding: 0 20px;
+    }
+
+    /* CARD (boîte moderne) */
+    .card {
+        background: var(--card);
+        padding: 20px;
+        border-radius: var(--radius);
+        box-shadow: 0 2px 10px var(--shadow);
+        margin-bottom: 25px;
+    }
+
+    /* FILTRES */
+    .filters {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+
+    .filters select,
+    .filters input {
+        padding: 10px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        font-size: 15px;
+        width: 260px;
+        background: #fff;
+    }
+
+    /* BOUTONS GLOBAUX */
+    .top-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-bottom: 20px;
+        padding: 0 20px;
+    }
+
+    .btn-main {
+        background: var(--primary);
+        color: white;
+        padding: 10px 15px;
+        border-radius: var(--radius);
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    /* FORMULAIRE D'AJOUT */
+    form.add-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    form.add-form input,
+    form.add-form select {
+        padding: 10px;
+        flex: 1;
+        min-width: 160px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        font-size: 15px;
+        background: #fff;
+    }
+
+    form.add-form button {
+        background: var(--primary);
+        border: none;
+        color: white;
+        padding: 10px 18px;
+        border-radius: var(--radius);
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    /* TABLE MODERNE */
+    table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 10px;
+    }
+
+    thead th {
+        padding: 12px;
+        text-align: left;
+        font-size: 14px;
+        color: #555;
+        border-bottom: 2px solid var(--border);
+    }
+
+    tbody tr {
+        background: #fff;
+        box-shadow: 0 2px 6px var(--shadow);
+        border-radius: var(--radius);
+    }
+
+    tbody td {
+        padding: 14px;
+        font-size: 15px;
+        vertical-align: middle;
+    }
+
+    tbody tr td:first-child {
+        border-top-left-radius: var(--radius);
+        border-bottom-left-radius: var(--radius);
+    }
+
+    tbody tr td:last-child {
+        border-top-right-radius: var(--radius);
+        border-bottom-right-radius: var(--radius);
+    }
+
+    /* Boutons dans la table */
+    td button {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    td a {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    td a:hover {
+        text-decoration: underline;
+    }
+
+    /* RECHERCHE */
+    .search-bar {
+        text-align: center;
+        margin-top: 15px;
+    }
+
+    .search-bar input {
+        padding: 10px;
+        width: 50%;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        font-size: 15px;
+    }
 </style>
+
+
+
 
 </head>
 
