@@ -116,10 +116,21 @@ def update_statut(id, new_status):
 
 @app.route("/statut_cnaps/<int:id>", methods=["POST"])
 def update_statut_cnaps(id):
-    nouveau_statut = request.form.get("statut_cnaps")
+
+    # --- Mode auto-save (JS fetch en JSON) ---
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        nouveau_statut = data.get("statut_cnaps", "")
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
+        return ("", 204)   # aucun rechargement de page
+
+    # --- Mode ancien formulaire (fallback) ---
+    nouveau_statut = request.form.get("statut_cnaps", "")
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
     return redirect("/")
+
 
 @app.route('/attestation/<int:id>')
 def attestation_pdf(id):
