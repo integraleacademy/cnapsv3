@@ -493,7 +493,7 @@ function saveDate(id) {
 }
 </script>
 
-	<script>
+<script>
 document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
     select.addEventListener("change", () => {
         const cid = select.dataset.id;
@@ -504,12 +504,53 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ statut_cnaps: value })
         }).then(() => {
+
+            // Petit effet visuel
             select.style.opacity = "0.5";
             setTimeout(() => { select.style.opacity = "1"; }, 300);
+
+            // === Mettre à jour les couleurs immédiatement ===
+            const classes = [
+                "statut-transmis",
+                "statut-enregistre",
+                "statut-instruction",
+                "statut-accepte",
+                "statut-refuse",
+                "statut-default",
+                "statut-docsmanquants"
+            ];
+
+            classes.forEach(c => select.classList.remove(c));
+
+            switch (value) {
+                case "TRANSMIS":
+                    select.classList.add("statut-transmis"); 
+                    break;
+                case "ENREGISTRÉ":
+                    select.classList.add("statut-enregistre"); 
+                    break;
+                case "INSTRUCTION":
+                    select.classList.add("statut-instruction"); 
+                    break;
+                case "ACCEPTÉ":
+                    select.classList.add("statut-accepte"); 
+                    break;
+                case "REFUSÉ":
+                    select.classList.add("statut-refuse"); 
+                    break;
+                case "DOCS COMPLEMENTAIRES":
+                    select.classList.add("statut-docsmanquants"); 
+                    break;
+                default:
+                    select.classList.add("statut-default");
+            }
         });
     });
 });
 </script>
+
+
+	
 
 
 </body>
