@@ -79,12 +79,22 @@
 
   <br><h3>Filtrer par Statut CNAPS :</h3>
   <form method="get" action="/" style="margin-bottom: 20px;">
-      <select name="filtre_cnaps" id="filtre_cnaps" onchange="this.form.submit()">
-          <option value="Tous" {% if filtre_cnaps == 'Tous' %}selected{% endif %}>Tous</option>
-          {% for statut in statuts_disponibles %}
-              <option value="{{ statut }}" {% if filtre_cnaps == statut %}selected{% endif %}>{{ statut }}</option>
-          {% endfor %}
-      </select>
+<select name="filtre_cnaps" id="filtre_cnaps" onchange="this.form.submit()">
+
+    <option value="SansAcceptes" {% if filtre_cnaps == 'SansAcceptes' %}selected{% endif %}>
+        Tous sauf Acceptés / Refusés
+    </option>
+
+    <option value="Tous" {% if filtre_cnaps == 'Tous' %}selected{% endif %}>
+        Tous
+    </option>
+
+    {% for statut in statuts_disponibles %}
+        <option value="{{ statut }}" {% if filtre_cnaps == statut %}selected{% endif %}>{{ statut }}</option>
+    {% endfor %}
+
+</select>
+
   </form>
 
   <a href="/ajouter_session" style="background-color: #007BFF; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: inline-block;">AJOUTER UNE SESSION</a>
