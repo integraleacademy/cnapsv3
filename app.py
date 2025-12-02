@@ -114,10 +114,25 @@ def delete(id):
 
 @app.route("/commentaire/<int:id>", methods=["POST"])
 def update_commentaire(id):
+
+    # --- Mode auto-save (fetch JSON) ---
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        commentaire = data.get("commentaire", "")
+
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (commentaire, id))
+
+        return ("", 204)
+
+    # --- Mode formulaire classique ---
     commentaire = request.form.get("commentaire", "")
+
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (commentaire, id))
+
     return redirect("/")
+
 
 @app.route("/statut/<int:id>/<string:new_status>")
 def update_statut(id, new_status):
