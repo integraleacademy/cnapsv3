@@ -90,10 +90,21 @@ def add():
 
 @app.route("/edit/<int:id>", methods=["POST"])
 def edit(id):
+
+    # --- Mode auto-save : fetch JSON ---
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        lien = data.get("lien", "")
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("UPDATE dossiers SET lien = ? WHERE id = ?", (lien, id))
+        return ("", 204)  # aucune redirection
+
+    # --- Mode ancien formulaire (fallback sécurité) ---
     lien = request.form.get("lien", "")
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET lien = ? WHERE id = ?", (lien, id))
     return redirect("/")
+
 
 @app.route("/delete/<int:id>")
 def delete(id):
