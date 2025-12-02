@@ -24,7 +24,9 @@ def get_stagiaire_by_id(id):
 
 @app.route("/")
 def index():
-    filtre_cnaps = request.args.get('filtre_cnaps', 'Tous')
+    # 👉 Filtre sélectionné par l’utilisateur (ou filtre par défaut)
+    filtre_cnaps = request.args.get('filtre_cnaps', 'SansAcceptes')
+
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
 
@@ -32,26 +34,36 @@ def index():
         cur_statuts = conn.execute("SELECT DISTINCT statut_cnaps FROM dossiers")
         statuts_disponibles = sorted([row['statut_cnaps'] for row in cur_statuts if row['statut_cnaps']])
 
-        # Dossiers filtrés selon statut
-        if filtre_cnaps != 'Tous':
-            cur = conn.execute("SELECT * FROM dossiers WHERE statut_cnaps=? ORDER BY id DESC", (filtre_cnaps,))
+        # 👉 Logique du filtre
+        if filtre_cnaps == 'SansAcceptes':
+            # ⛔️ On masque ACCEPTÉ et REFUSÉ
+            cur = conn.execute("""
+                SELECT * FROM dossiers
+                WHERE statut_cnaps NOT IN ('ACCEPTÉ', 'REFUSÉ')
+                ORDER BY id DESC
+            """)
+        elif filtre_cnaps != 'Tous':
+            # Filtre précis choisi par l'utilisateur
+            cur = conn.execute("""
+                SELECT * FROM dossiers
+                WHERE statut_cnaps = ?
+                ORDER BY id DESC
+            """, (filtre_cnaps,))
         else:
+            # Tout afficher
             cur = conn.execute("SELECT * FROM dossiers ORDER BY id DESC")
+
         dossiers = cur.fetchall()
 
-        # ✅ Dossiers acceptés dans les 7 derniers jours
+        # (Tu peux laisser ta partie recent_acceptes ici si tu veux)
         sept_jours = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         cur_acceptes = conn.execute("""
             SELECT nom, prenom, session
             FROM dossiers
             WHERE statut_cnaps = 'ACCEPTE'
-            AND (
-                session >= ? 
-                OR date(session) >= date(?)
-                OR date(lien) >= date(?)  -- si jamais la date est stockée ailleurs
-            )
+            AND (session >= ?)
             ORDER BY session DESC
-        """, (sept_jours, sept_jours, sept_jours))
+        """, (sept_jours,))
         recent_acceptes = cur_acceptes.fetchall()
 
     return render_template(
@@ -61,6 +73,7 @@ def index():
         filtre_cnaps=filtre_cnaps,
         statuts_disponibles=statuts_disponibles
     )
+
 
 
 @app.route("/add", methods=["POST"])
