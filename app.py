@@ -39,7 +39,7 @@ def index():
             # ⛔️ On masque ACCEPTÉ et REFUSÉ
             cur = conn.execute("""
                 SELECT * FROM dossiers
-                WHERE statut_cnaps NOT IN ('ACCEPTÉ', 'REFUSÉ')
+                WHERE statut_cnaps NOT IN ('ACCEPTE', 'REFUSE')
                 ORDER BY id DESC
             """)
         elif filtre_cnaps != 'Tous':
