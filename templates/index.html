@@ -60,7 +60,6 @@
 </style>
 
 </head>
-\1
 
 
 
@@ -76,9 +75,20 @@
       <h1>Gestion des dossiers CNAPS Intégrale Academy</h1>
     </div>
     <a class="btn-link" href="https://depot-teleservices-cnaps.interieur.gouv.fr/" target="_blank">Nouvelle demande CNAPS</a>
-  </header>
+   </header>
+
+  <br><h3>Filtrer par Statut CNAPS :</h3>
+  <form method="get" action="/" style="margin-bottom: 20px;">
+      <select name="filtre_cnaps" id="filtre_cnaps" onchange="this.form.submit()">
+          <option value="Tous" {% if filtre_cnaps == 'Tous' %}selected{% endif %}>Tous</option>
+          {% for statut in statuts_disponibles %}
+              <option value="{{ statut }}" {% if filtre_cnaps == statut %}selected{% endif %}>{{ statut }}</option>
+          {% endfor %}
+      </select>
+  </form>
 
   <a href="/ajouter_session" style="background-color: #007BFF; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: inline-block;">AJOUTER UNE SESSION</a>
+
 
 
   <form method="POST" action="/add">
@@ -190,15 +200,7 @@
 
   </table>
 
-<br><h3>Filtrer par Statut CNAPS :</h3>
-<form method="get" action="/" style="margin-bottom: 20px;">
-    <select name="filtre_cnaps" id="filtre_cnaps" onchange="this.form.submit()">
-        <option value="Tous" {% if filtre_cnaps == 'Tous' %}selected{% endif %}>Tous</option>
-        {% for statut in statuts_disponibles %}
-            <option value="{{ statut }}" {% if filtre_cnaps == statut %}selected{% endif %}>{{ statut }}</option>
-        {% endfor %}
-    </select>
-</form>
+
 
 
 <script>
