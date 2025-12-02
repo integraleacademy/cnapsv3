@@ -350,15 +350,19 @@ td form select {
                 <td>{{ dossier[4] }}</td> <!-- Session -->
                 
 <td>
-   <input type="text"
-       class="lien-input"
-       data-id="{{ dossier[0] }}"
-       value="{{ dossier[5] or '' }}"
-       placeholder="Modifier lien" />
+    <input type="text"
+           class="lien-input"
+           data-id="{{ dossier[0] }}"
+           value="{{ dossier[5] or '' }}"
+           placeholder="Modifier lien" />
 
-{% if dossier[5] %}
-    <a href="{{ dossier[5] }}" target="_blank">🔗 Voir le lien</a>
-{% endif %}
+    <span class="link-preview" id="preview-{{ dossier[0] }}">
+        {% if dossier[5] %}
+            <a href="{{ dossier[5] }}" target="_blank">🔗 Voir le lien</a>
+        {% endif %}
+    </span>
+</td>
+
 
 
                 
@@ -563,13 +567,24 @@ document.querySelectorAll(".lien-input").forEach(input => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ lien: lien })
         }).then(() => {
-            input.style.backgroundColor = "#d4ffd4";  // petit indicateur vert
+            input.style.backgroundColor = "#d4ffd4";  
             setTimeout(() => input.style.backgroundColor = "", 400);
-			showCheck();
+
+            showCheck();
+
+            // === Mettre à jour le lien sans recharger ===
+            const preview = document.getElementById("preview-" + id);
+
+            if (lien.trim() === "") {
+                preview.innerHTML = "";
+            } else {
+                preview.innerHTML = `<a href="${lien}" target="_blank">🔗 Voir le lien</a>`;
+            }
         });
     });
 });
 </script>
+
 
 	<script>
 document.querySelectorAll(".commentaire-input").forEach(area => {
