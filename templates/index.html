@@ -257,6 +257,26 @@ td form select {
     display: flex;
     align-items: center;
 }
+
+		/* Désactive le soulignement des liens dans le tableau */
+table a {
+    text-decoration: none !important;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+table a:hover {
+    text-decoration: none !important;
+    opacity: 0.8;
+}
+/* Spécifique pour les previews */
+.link-preview a {
+    text-decoration: none !important;
+    color: var(--primary);
+    font-weight: 600;
+}
+		
+
 	
 		
 </style>
