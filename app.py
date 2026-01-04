@@ -106,7 +106,7 @@ def edit(id):
     return redirect("/")
 
 
-@app.route("/delete/<int:id>")
+@app.route("/delete/<int:id>", methods=["POST"])
 def delete(id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("DELETE FROM dossiers WHERE id = ?", (id,))
