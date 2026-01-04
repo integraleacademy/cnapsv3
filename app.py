@@ -282,7 +282,7 @@ def login():
             return render_template("login.html")
 
         # Vérification
-        if email == ADMIN_EMAIL and check_password_hash(ADMIN_PASSWORD_HASH, password):
+        if email == ADMIN_EMAIL and password == os.getenv("ADMIN_PASSWORD"):
             session["user"] = email
             session.permanent = True  # ✅ cookie persistant
             next_url = request.args.get("next") or "/"
