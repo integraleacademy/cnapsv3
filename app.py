@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, make_response, send_file
+from flask import Flask, render_template, request, redirect, make_response, send_file, session, flash, url_for
 from weasyprint import HTML
 import sqlite3
 import os
@@ -6,6 +6,9 @@ import shutil
 import csv
 from io import StringIO
 from datetime import datetime, timedelta
+from functools import wraps
+from werkzeug.security import check_password_hash
+
 
 
 # ⚠️ IMPORTANT : en prod (Render), NE PAS recopier une base automatiquement
@@ -14,7 +17,23 @@ from datetime import datetime, timedelta
 #     shutil.copy("cnaps.db", "/mnt/data/cnaps.db")
 
 app = Flask(__name__)
+
+# --- Sécurité + session persistante (cookie) ---
+app.secret_key = os.getenv("SECRET_KEY", "change-me")  # ⚠️ Sur Render: mets un vrai SECRET_KEY
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=True,            # Render = HTTPS
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30)  # garde le login 30 jours
+)
+
+# Identifiants admin (via variables Render)
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower().strip()
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
+
 DB_NAME = "/mnt/data/cnaps.db"
+
 
 def get_stagiaire_by_id(id):
     conn = sqlite3.connect(DB_NAME)
