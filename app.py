@@ -259,6 +259,36 @@ def import_csv():
     </form>
     '''
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = (request.form.get("email") or "").lower().strip()
+        password = request.form.get("password") or ""
+
+        # Si les variables Render ne sont pas en place, on bloque
+        if not ADMIN_EMAIL or not ADMIN_PASSWORD_HASH:
+            flash("Login non configuré (variables Render manquantes).", "error")
+            return render_template("login.html")
+
+        # Vérification
+        if email == ADMIN_EMAIL and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            session["user"] = email
+            session.permanent = True  # ✅ cookie persistant
+            next_url = request.args.get("next") or "/"
+            return redirect(next_url)
+
+        flash("Identifiants incorrects.", "error")
+        return render_template("login.html")
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 # ------------------------------------------------------------
 # ✅ Route publique pour le suivi sur la plateforme principale
 # ------------------------------------------------------------
