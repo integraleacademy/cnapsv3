@@ -34,6 +34,23 @@ ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
 
 DB_NAME = "/mnt/data/cnaps.db"
 
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        # Si pas connecté -> redirection vers /login
+        if not session.get("user"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.before_request
+def make_session_persistent():
+    # Si l’utilisateur est déjà loggé, on garde une session persistante (cookie)
+    if session.get("user"):
+        session.permanent = True
+
+
 
 def get_stagiaire_by_id(id):
     conn = sqlite3.connect(DB_NAME)
