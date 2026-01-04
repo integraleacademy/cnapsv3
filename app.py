@@ -30,7 +30,8 @@ app.config.update(
 
 # Identifiants admin (via variables Render)
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower().strip()
-ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
 
 DB_NAME = "/mnt/data/cnaps.db"
 
@@ -277,12 +278,12 @@ def login():
         password = request.form.get("password") or ""
 
         # Si les variables Render ne sont pas en place, on bloque
-        if not ADMIN_EMAIL or not ADMIN_PASSWORD_HASH:
+        if not ADMIN_EMAIL or not ADMIN_PASSWORD:
             flash("Login non configuré (variables Render manquantes).", "error")
             return render_template("login.html")
 
         # Vérification
-        if email == ADMIN_EMAIL and password == os.getenv("ADMIN_PASSWORD"):
+        if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
             session["user"] = email
             session.permanent = True  # ✅ cookie persistant
             next_url = request.args.get("next") or "/"
@@ -292,6 +293,7 @@ def login():
         return render_template("login.html")
 
     return render_template("login.html")
+
 
 
 @app.route("/logout")
