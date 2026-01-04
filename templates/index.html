@@ -474,7 +474,14 @@ table a:hover {
                 </td>
                 <td>
                     <a href="/attestation/{{ dossier[0] }}">📄 Attestation</a><br>
-                    <a href="/delete/{{ dossier[0] }}" style="color:red;">❌ Supprimer</a>
+                    <form action="/delete/{{ dossier[0] }}" method="post" style="display:inline;"
+      onsubmit="return confirm('Supprimer ce dossier ?');">
+  <button type="submit"
+          style="background:#e74c3c;color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;">
+    ❌ Supprimer
+  </button>
+</form>
+
                 </td>
             </tr>
             {% endfor %}
