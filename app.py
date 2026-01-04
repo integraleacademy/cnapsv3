@@ -8,9 +8,10 @@ from io import StringIO
 from datetime import datetime, timedelta
 
 
-# Copier l’ancienne base si elle existe encore localement
-if os.path.exists("cnaps.db") and not os.path.exists("/mnt/data/cnaps.db"):
-    shutil.copy("cnaps.db", "/mnt/data/cnaps.db")
+# ⚠️ IMPORTANT : en prod (Render), NE PAS recopier une base automatiquement
+# Ça peut restaurer une vieille base et faire "disparaître" des dossiers.
+# if os.path.exists("cnaps.db") and not os.path.exists("/mnt/data/cnaps.db"):
+#     shutil.copy("cnaps.db", "/mnt/data/cnaps.db")
 
 app = Flask(__name__)
 DB_NAME = "/mnt/data/cnaps.db"
