@@ -684,7 +684,7 @@ document.querySelectorAll(".badge-statut").forEach(badge => {
         const newStatus = current === "COMPLET" ? "INCOMPLET" : "COMPLET";
 
         // Enregistrement back-end
-        fetch(`/statut/${id}/${newStatus}`)
+        fetch(`/statut/${id}/${newStatus}`, { method: "POST" })
             .then(() => {
 				showCheck();  // 👈 check vert discret !
                 // Mise à jour instantanée visuelle
