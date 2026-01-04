@@ -60,6 +60,7 @@ def get_stagiaire_by_id(id):
     return stagiaire
 
 @app.route("/")
+@login_required
 def index():
     # 👉 Filtre sélectionné par l’utilisateur (ou filtre par défaut)
     filtre_cnaps = request.args.get('filtre_cnaps', 'SansAcceptes')
@@ -114,6 +115,7 @@ def index():
 
 
 @app.route("/add", methods=["POST"])
+@login_required
 def add():
     nom = request.form["nom"]
     prenom = request.form["prenom"]
@@ -126,7 +128,9 @@ def add():
     return redirect("/")
 
 @app.route("/edit/<int:id>", methods=["POST"])
+@login_required
 def edit(id):
+
 
     # --- Mode auto-save : fetch JSON ---
     if request.is_json:
@@ -144,12 +148,14 @@ def edit(id):
 
 
 @app.route("/delete/<int:id>", methods=["POST"])
+@login_required
 def delete(id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("DELETE FROM dossiers WHERE id = ?", (id,))
     return redirect("/")
 
 @app.route("/commentaire/<int:id>", methods=["POST"])
+@login_required
 def update_commentaire(id):
 
     # --- Mode auto-save (fetch JSON) ---
@@ -172,12 +178,14 @@ def update_commentaire(id):
 
 
 @app.route("/statut/<int:id>/<string:new_status>", methods=["POST"])
+@login_required
 def update_statut(id, new_status):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut = ? WHERE id = ?", (new_status, id))
     return ("", 204)
 
 @app.route("/statut_cnaps/<int:id>", methods=["POST"])
+@login_required
 def update_statut_cnaps(id):
 
     # --- Mode auto-save (JS fetch en JSON) ---
@@ -196,6 +204,7 @@ def update_statut_cnaps(id):
 
 
 @app.route('/attestation/<int:id>')
+@login_required
 def attestation_pdf(id):
     stagiaire = get_stagiaire_by_id(id)
     if not stagiaire:
@@ -212,6 +221,7 @@ def attestation_pdf(id):
     return response
 
 @app.route("/export")
+@login_required
 def export_csv():
     si = StringIO()
     writer = csv.writer(si)
@@ -225,6 +235,7 @@ def export_csv():
     return output
 
 @app.route("/import", methods=["GET", "POST"])
+@login_required
 def import_csv():
     if request.method == "POST":
         file = request.files["file"]
