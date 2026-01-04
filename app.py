@@ -134,11 +134,11 @@ def update_commentaire(id):
     return redirect("/")
 
 
-@app.route("/statut/<int:id>/<string:new_status>")
+@app.route("/statut/<int:id>/<string:new_status>", methods=["POST"])
 def update_statut(id, new_status):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut = ? WHERE id = ?", (new_status, id))
-    return redirect("/")
+    return ("", 204)
 
 @app.route("/statut_cnaps/<int:id>", methods=["POST"])
 def update_statut_cnaps(id):
