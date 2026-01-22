@@ -350,3 +350,48 @@ def recent_acceptes_json():
     except Exception as e:
         print("⚠️ Erreur /recent_acceptes.json :", e)
         return {"recent_acceptes": [], "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
+
+@app.route("/lookup_cnaps.json")
+def lookup_cnaps():
+    nom = (request.args.get("nom") or "").strip().lower()
+    prenom = (request.args.get("prenom") or "").strip().lower()
+
+    if not nom or not prenom:
+        return {
+            "ok": False,
+            "error": "missing nom or prenom"
+        }, 400, {"Access-Control-Allow-Origin": "*"}
+
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("""
+                SELECT statut_cnaps
+                FROM dossiers
+                WHERE LOWER(nom)=?
+                  AND LOWER(prenom)=?
+                ORDER BY id DESC
+                LIMIT 1
+            """, (nom, prenom)).fetchone()
+
+        if not row or not row["statut_cnaps"]:
+            return {
+                "ok": True,
+                "nom": nom,
+                "prenom": prenom,
+                "statut_cnaps": "INCONNU"
+            }, 200, {"Access-Control-Allow-Origin": "*"}
+
+        return {
+            "ok": True,
+            "nom": nom,
+            "prenom": prenom,
+            "statut_cnaps": row["statut_cnaps"]
+        }, 200, {"Access-Control-Allow-Origin": "*"}
+
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e)
+        }, 500, {"Access-Control-Allow-Origin": "*"}
+
