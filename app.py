@@ -8,6 +8,8 @@ from io import StringIO
 from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import check_password_hash
+import unicodedata
+
 
 
 
@@ -351,10 +353,17 @@ def recent_acceptes_json():
         print("⚠️ Erreur /recent_acceptes.json :", e)
         return {"recent_acceptes": [], "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
 
+def _normalize(txt: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", txt)
+        if unicodedata.category(c) != "Mn"
+    ).lower().strip()
+
+
 @app.route("/lookup_cnaps.json")
 def lookup_cnaps():
-    nom = (request.args.get("nom") or "").strip().lower()
-    prenom = (request.args.get("prenom") or "").strip().lower()
+    nom = request.args.get("nom") or ""
+    prenom = request.args.get("prenom") or ""
 
     if not nom or not prenom:
         return {
@@ -362,31 +371,32 @@ def lookup_cnaps():
             "error": "missing nom or prenom"
         }, 400, {"Access-Control-Allow-Origin": "*"}
 
+    nom_n = _normalize(nom)
+    prenom_n = _normalize(prenom)
+
     try:
         with sqlite3.connect(DB_NAME) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute("""
-                SELECT statut_cnaps
+            rows = conn.execute("""
+                SELECT nom, prenom, statut_cnaps
                 FROM dossiers
-                WHERE LOWER(nom)=?
-                  AND LOWER(prenom)=?
                 ORDER BY id DESC
-                LIMIT 1
-            """, (nom, prenom)).fetchone()
+            """).fetchall()
 
-        if not row or not row["statut_cnaps"]:
-            return {
-                "ok": True,
-                "nom": nom,
-                "prenom": prenom,
-                "statut_cnaps": "INCONNU"
-            }, 200, {"Access-Control-Allow-Origin": "*"}
+        for r in rows:
+            if _normalize(r["nom"]) == nom_n and _normalize(r["prenom"]) == prenom_n:
+                return {
+                    "ok": True,
+                    "nom": r["nom"],
+                    "prenom": r["prenom"],
+                    "statut_cnaps": r["statut_cnaps"] or "INCONNU"
+                }, 200, {"Access-Control-Allow-Origin": "*"}
 
         return {
             "ok": True,
             "nom": nom,
             "prenom": prenom,
-            "statut_cnaps": row["statut_cnaps"]
+            "statut_cnaps": "INCONNU"
         }, 200, {"Access-Control-Allow-Origin": "*"}
 
     except Exception as e:
