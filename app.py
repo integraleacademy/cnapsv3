@@ -354,10 +354,13 @@ def recent_acceptes_json():
         return {"recent_acceptes": [], "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
 
 def _normalize(txt: str) -> str:
-    return "".join(
+    if txt is None:
+        return ""
+    normalized = "".join(
         c for c in unicodedata.normalize("NFD", txt)
         if unicodedata.category(c) != "Mn"
-    ).lower().strip()
+    ).lower()
+    return "".join(c for c in normalized if c.isalnum())
 
 
 @app.route("/lookup_cnaps.json")
@@ -368,37 +371,28 @@ def lookup_cnaps():
     if not nom or not prenom:
         return {"ok": False, "error": "missing nom or prenom"}, 400, {"Access-Control-Allow-Origin": "*"}
 
-    # Normalisation SQL (lower + suppression accents courants) SUR la colonne et sur l'entrée
-    norm_col_nom = """
-      LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-          nom,
-          'É','E'),'È','E'),'Ê','E'),'Ë','E'),'é','e'),'è','e'),'ê','e'),'ë','e'),
-          'À','A'),'Â','A'),'Ä','A'),'à','a'),'â','a'),'ä','a'),
-          'Ç','C'),'ç','c'))
-    """
-    norm_col_prenom = norm_col_nom.replace("nom", "prenom")
-
-    norm_in = """
-      LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-          ?,
-          'É','E'),'È','E'),'Ê','E'),'Ë','E'),'é','e'),'è','e'),'ê','e'),'ë','e'),
-          'À','A'),'Â','A'),'Ä','A'),'à','a'),'â','a'),'ä','a'),
-          'Ç','C'),'ç','c'))
-    """
-
     try:
         with sqlite3.connect(DB_NAME) as conn:
             conn.row_factory = sqlite3.Row
+            conn.create_function("norm", 1, _normalize)
             row = conn.execute(f"""
                 SELECT nom, prenom, statut_cnaps
                 FROM dossiers
-                WHERE {norm_col_nom} = {norm_in}
-                  AND {norm_col_prenom} = {norm_in}
+                WHERE norm(nom) = norm(?)
+                  AND norm(prenom) = norm(?)
                 ORDER BY id DESC
                 LIMIT 1
             """, (nom, prenom)).fetchone()
+
+            if not row:
+                row = conn.execute(f"""
+                    SELECT nom, prenom, statut_cnaps
+                    FROM dossiers
+                    WHERE norm(nom) = norm(?)
+                      AND norm(prenom) = norm(?)
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (prenom, nom)).fetchone()
 
         if not row:
             return {"ok": True, "nom": nom, "prenom": prenom, "statut_cnaps": "INCONNU"}, 200, {"Access-Control-Allow-Origin": "*"}
@@ -412,4 +406,3 @@ def lookup_cnaps():
 
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
-
