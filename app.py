@@ -368,24 +368,26 @@ def lookup_cnaps():
     if not nom or not prenom:
         return {"ok": False, "error": "missing nom or prenom"}, 400, {"Access-Control-Allow-Origin": "*"}
 
-    # Normalisation SQL (lower + suppression accents courants) SUR la colonne et sur l'entrée
+    # Normalisation SQL (lower + suppression accents + espaces/ponctuation) SUR la colonne et sur l'entrée
     norm_col_nom = """
       LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
         REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-          nom,
+          REPLACE(REPLACE(REPLACE(REPLACE(nom,
           'É','E'),'È','E'),'Ê','E'),'Ë','E'),'é','e'),'è','e'),'ê','e'),'ë','e'),
           'À','A'),'Â','A'),'Ä','A'),'à','a'),'â','a'),'ä','a'),
-          'Ç','C'),'ç','c'))
+          'Ç','C'),'ç','c'),
+          ' ',''),'-',''),''''',''),'.',''))
     """
     norm_col_prenom = norm_col_nom.replace("nom", "prenom")
 
     norm_in = """
       LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
         REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-          ?,
+          REPLACE(REPLACE(REPLACE(REPLACE(?,
           'É','E'),'È','E'),'Ê','E'),'Ë','E'),'é','e'),'è','e'),'ê','e'),'ë','e'),
           'À','A'),'Â','A'),'Ä','A'),'à','a'),'â','a'),'ä','a'),
-          'Ç','C'),'ç','c'))
+          'Ç','C'),'ç','c'),
+          ' ',''),'-',''),''''',''),'.',''))
     """
 
     try:
@@ -400,6 +402,16 @@ def lookup_cnaps():
                 LIMIT 1
             """, (nom, prenom)).fetchone()
 
+            if not row:
+                row = conn.execute(f"""
+                    SELECT nom, prenom, statut_cnaps
+                    FROM dossiers
+                    WHERE {norm_col_nom} = {norm_in}
+                      AND {norm_col_prenom} = {norm_in}
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (prenom, nom)).fetchone()
+
         if not row:
             return {"ok": True, "nom": nom, "prenom": prenom, "statut_cnaps": "INCONNU"}, 200, {"Access-Control-Allow-Origin": "*"}
 
@@ -412,4 +424,3 @@ def lookup_cnaps():
 
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
-
