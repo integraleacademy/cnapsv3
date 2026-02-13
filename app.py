@@ -37,6 +37,53 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 DB_NAME = "/mnt/data/cnaps.db"
 
+
+def init_db():
+    """Crée les structures nécessaires pour historiser les statuts CNAPS."""
+    os.makedirs(os.path.dirname(DB_NAME), exist_ok=True)
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS statut_cnaps_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dossier_id INTEGER NOT NULL,
+                statut_cnaps TEXT NOT NULL,
+                changed_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE
+            )
+        """)
+
+
+def _record_statut_cnaps_history(conn, dossier_id, nouveau_statut):
+    """Enregistre la date/heure précise d'un changement de statut CNAPS."""
+    if not nouveau_statut:
+        return
+
+    conn.execute(
+        """
+        INSERT INTO statut_cnaps_history (dossier_id, statut_cnaps)
+        VALUES (?, ?)
+        """,
+        (dossier_id, nouveau_statut),
+    )
+
+
+def _get_statuts_dates(conn, dossier_id):
+    """Retourne pour un dossier la dernière date connue pour chaque statut CNAPS."""
+    rows = conn.execute(
+        """
+        SELECT statut_cnaps, MAX(changed_at) AS changed_at
+        FROM statut_cnaps_history
+        WHERE dossier_id = ?
+        GROUP BY statut_cnaps
+        ORDER BY changed_at ASC
+        """,
+        (dossier_id,),
+    ).fetchall()
+    return {row["statut_cnaps"]: row["changed_at"] for row in rows}
+
+
+init_db()
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -197,12 +244,14 @@ def update_statut_cnaps(id):
         nouveau_statut = data.get("statut_cnaps", "")
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
+            _record_statut_cnaps_history(conn, id, nouveau_statut)
         return ("", 204)   # aucun rechargement de page
 
     # --- Mode ancien formulaire (fallback) ---
     nouveau_statut = request.form.get("statut_cnaps", "")
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
+        _record_statut_cnaps_history(conn, id, nouveau_statut)
     return redirect("/")
 
 
@@ -376,7 +425,7 @@ def lookup_cnaps():
             conn.row_factory = sqlite3.Row
             conn.create_function("norm", 1, _normalize)
             row = conn.execute(f"""
-                SELECT nom, prenom, statut_cnaps
+                SELECT id, nom, prenom, statut_cnaps
                 FROM dossiers
                 WHERE norm(nom) = norm(?)
                   AND norm(prenom) = norm(?)
@@ -386,7 +435,7 @@ def lookup_cnaps():
 
             if not row:
                 row = conn.execute(f"""
-                    SELECT nom, prenom, statut_cnaps
+                    SELECT id, nom, prenom, statut_cnaps
                     FROM dossiers
                     WHERE norm(nom) = norm(?)
                       AND norm(prenom) = norm(?)
@@ -394,15 +443,19 @@ def lookup_cnaps():
                     LIMIT 1
                 """, (prenom, nom)).fetchone()
 
-        if not row:
-            return {"ok": True, "nom": nom, "prenom": prenom, "statut_cnaps": "INCONNU"}, 200, {"Access-Control-Allow-Origin": "*"}
+            if not row:
+                return {"ok": True, "nom": nom, "prenom": prenom, "statut_cnaps": "INCONNU"}, 200, {"Access-Control-Allow-Origin": "*"}
 
-        return {
-            "ok": True,
-            "nom": row["nom"],
-            "prenom": row["prenom"],
-            "statut_cnaps": row["statut_cnaps"] or "INCONNU"
-        }, 200, {"Access-Control-Allow-Origin": "*"}
+            statuts_dates = _get_statuts_dates(conn, row["id"])
+
+            return {
+                "ok": True,
+                "id": row["id"],
+                "nom": row["nom"],
+                "prenom": row["prenom"],
+                "statut_cnaps": row["statut_cnaps"] or "INCONNU",
+                "statuts_cnaps_dates": statuts_dates
+            }, 200, {"Access-Control-Allow-Origin": "*"}
 
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
