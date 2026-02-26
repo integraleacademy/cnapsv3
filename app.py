@@ -1030,7 +1030,21 @@ def update_espace_cnaps(request_id):
             validation_url=f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}",
             dracar_auth_url=DRACAR_AUTH_URL,
         )
-        _send_email_html(req["email"], "Votre Espace Particulier CNAPS est créé", html)
+        recipient_email = (req["email"] or "").strip()
+        if recipient_email:
+            try:
+                _send_email_html(recipient_email, "Votre Espace Particulier CNAPS est créé", html)
+            except Exception:
+                app.logger.exception(
+                    "Échec envoi email espace CNAPS request_id=%s email=%r",
+                    request_id,
+                    recipient_email,
+                )
+        else:
+            app.logger.warning(
+                "Email manquant pour l'envoi espace CNAPS request_id=%s",
+                request_id,
+            )
 
         sms = (
             f"Bonjour {req['prenom']}, votre Espace Particulier CNAPS pour la formation {formation_name} "
