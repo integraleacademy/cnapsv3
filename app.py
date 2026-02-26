@@ -115,13 +115,6 @@ def _cnaps_expiration_label(expiration_dt):
     return expiration_dt.strftime("%d/%m/%Y à %Hh%M")
 
 
-def _format_db_datetime_label(value):
-    dt = _parse_db_datetime(value)
-    if dt is None:
-        return ""
-    return dt.strftime("%d/%m/%Y à %Hh%M")
-
-
 def _compute_cnaps_timing(req):
     created_at = _parse_db_datetime(req.get("espace_cnaps_created_at"))
     if created_at is None and (req.get("espace_cnaps") or "") == "Créé":
@@ -934,7 +927,6 @@ def _send_cnaps_reminders(conn, requests_rows):
                 "UPDATE public_requests SET cnaps_reminder_4h_sent_at = ? WHERE id = ?",
                 (now_db, req["id"]),
             )
-            req["cnaps_reminder_4h_sent_at"] = now_db
 
         if second_due:
             if recipient_email:
@@ -953,45 +945,6 @@ def _send_cnaps_reminders(conn, requests_rows):
                 "UPDATE public_requests SET cnaps_reminder_2h_sent_at = ? WHERE id = ?",
                 (now_db, req["id"]),
             )
-            req["cnaps_reminder_2h_sent_at"] = now_db
-
-
-def _build_cnaps_relance_preview(req):
-    timing = _compute_cnaps_timing(req)
-    expiration_label = timing["cnaps_expiration_label"]
-    formation_name = _formation_full_name(req.get("formation"))
-    first_sent = _format_db_datetime_label(req.get("cnaps_reminder_4h_sent_at"))
-    second_sent = _format_db_datetime_label(req.get("cnaps_reminder_2h_sent_at"))
-
-    previews = [
-        {
-            "key": "4h",
-            "title": "Relance 4h",
-            "subject": "Rappel CNAPS : expiration dans 4h",
-            "sms": f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
-            "html": (
-                f"<p>Bonjour {req.get('prenom')},</p>"
-                f"<p>Rappel : votre lien CNAPS pour la formation {formation_name} "
-                f"expire le <strong>{expiration_label}</strong>.</p>"
-                "<p>Merci de finaliser la validation de votre espace CNAPS rapidement.</p>"
-            ),
-            "sent_at": first_sent,
-        },
-        {
-            "key": "2h",
-            "title": "Relance 2h",
-            "subject": "Attention CNAPS : expiration dans 2h",
-            "sms": f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
-            "html": (
-                f"<p>Bonjour {req.get('prenom')},</p>"
-                f"<p><strong>Attention</strong> : votre lien CNAPS pour la formation {formation_name} "
-                f"expire le <strong>{expiration_label}</strong>.</p>"
-                "<p>Il reste moins de 2 heures pour valider votre espace CNAPS.</p>"
-            ),
-            "sent_at": second_sent,
-        },
-    ]
-    return previews, timing
 
 
 def _sanitize_zip_component(value: str) -> str:
@@ -1168,8 +1121,6 @@ def a_traiter():
         for row in rows_dict:
             timing = _compute_cnaps_timing(row)
             row.update(timing)
-            row["cnaps_reminder_4h_sent_label"] = _format_db_datetime_label(row.get("cnaps_reminder_4h_sent_at"))
-            row["cnaps_reminder_2h_sent_label"] = _format_db_datetime_label(row.get("cnaps_reminder_2h_sent_at"))
             if row.get("espace_cnaps") == "Validé":
                 row["cnaps_is_expired"] = False
 
@@ -1330,33 +1281,7 @@ def assign_formation(request_id):
 
     if request.is_json:
         return jsonify({"ok": True})
-
     return redirect(url_for("a_traiter"))
-
-
-@app.route("/a-traiter/<int:request_id>/relance-preview")
-@login_required
-def relance_preview(request_id):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.row_factory = sqlite3.Row
-        req = conn.execute(
-            "SELECT * FROM public_requests WHERE id = ?",
-            (request_id,),
-        ).fetchone()
-
-    if not req:
-        abort(404)
-
-    request_data = dict(req)
-    reminders, timing = _build_cnaps_relance_preview(request_data)
-    return render_template(
-        "relance_cnaps_preview.html",
-        req=request_data,
-        reminders=reminders,
-        timing=timing,
-        first_sent_label=_format_db_datetime_label(request_data.get("cnaps_reminder_4h_sent_at")),
-        second_sent_label=_format_db_datetime_label(request_data.get("cnaps_reminder_2h_sent_at")),
-    )
 
 
 @app.route("/a-traiter/<int:request_id>/delete", methods=["POST"])
