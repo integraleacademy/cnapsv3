@@ -1200,9 +1200,11 @@ def notify_non_conformities(request_id):
             return redirect(url_for("request_documents", request_id=request_id))
 
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
+        formation_name = _formation_full_name(req["formation"])
         html = render_template(
             "emails/non_conformite.html",
             prenom=req["prenom"],
+            formation_name=formation_name,
             docs=docs,
             labels=DOC_LABELS,
             replace_url=replace_url,
