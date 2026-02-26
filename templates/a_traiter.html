@@ -1,36 +1,345 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>A traiter</title>
-<style>body{font-family:Arial;background:#f4f6fb;margin:0} .wrap{max-width:1200px;margin:24px auto;background:#fff;padding:20px;border-radius:14px} table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left} .btn{padding:8px 10px;border-radius:8px;border:none;cursor:pointer;background:#2d6cdf;color:white} .btn.grey{background:#9ca3af;cursor:not-allowed} .orange{background:#f59e0b;animation:pulse 1.2s infinite} @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.6)}100%{box-shadow:0 0 0 14px rgba(245,158,11,0)}}</style>
-</head><body><div class="wrap">
-  <h1>Onglet A traiter</h1><a href="/">← Retour</a>
-  <table><thead><tr><th>Nom</th><th>Prénom</th><th>Affecter une formation</th><th>Formation</th><th>Dates de formation</th><th>Générer attestation</th><th>Gérer les documents</th><th>Télécharger les documents</th><th>Statut CNAPS</th><th>Ajouter un commentaire / Supprimer</th></tr></thead><tbody>
-  {% for r in requests %}
-    <tr>
-      <td>{{ r.nom }}</td><td>{{ r.prenom }}</td>
-      <td>
-        {% if r.formation and r.session_date %}
-          <button class="btn grey" disabled>Affectée</button>
-        {% else %}
-          <button class="btn" onclick="openAssign({{ r.id }})">Affecter une formation</button>
-        {% endif %}
-      </td>
-      <td>{{ r.formation or '-' }}</td>
-      <td>{{ r.session_date or '-' }}</td>
-      <td>{% if r.dossier_id and r.formation %}<a class="btn" href="/attestation/{{ r.dossier_id }}">Générer</a>{% else %}-{% endif %}</td>
-      <td><a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a></td>
-      <td><a class="btn" href="/a-traiter/{{ r.id }}/download">Télécharger les documents</a></td>
-      <td>{{ r.statut_cnaps or 'A TRAITER' }}</td>
-      <td>
-        <form action="/commentaire/{{ r.dossier_id }}" method="post"><input name="commentaire" placeholder="Commentaire" style="padding:8px;border:1px solid #ddd;border-radius:8px"><button class="btn" type="submit">Ajouter</button></form>
-        <form action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')"><button class="btn" style="background:#dc2626;margin-top:6px">Supprimer</button></form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody></table>
-</div>
-<dialog id="assignDialog"><form id="assignForm" method="post"><h3>Affecter une formation</h3><label>Formation</label><select name="formation" required><option value="APS">APS</option><option value="A3P">A3P</option></select><label>Date</label><input type="text" name="session_date" required placeholder="Ex: Du 5 janvier au 6 février 2026"><div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div></form></dialog>
-<script>
-const assignDialog=document.getElementById('assignDialog'); const assignForm=document.getElementById('assignForm');
-function openAssign(id){assignForm.action=`/a-traiter/${id}/assign`; assignDialog.showModal();}
-</script>
-</body></html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>À traiter - CNAPS</title>
+  <style>
+    :root {
+      --primary: #2d6cdf;
+      --primary-dark: #1f56b2;
+      --danger: #dc2626;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --bg: #eff1f6;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --radius: 12px;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 82px;
+      height: 82px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+      background: #fff;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .back-link:hover { text-decoration: underline; }
+
+    .page {
+      width: 100%;
+      padding: 18px 24px 28px;
+    }
+
+    .card {
+      width: 100%;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid #ecedf1;
+    }
+
+    .card-title {
+      margin: 0;
+      padding: 18px 22px;
+      font-size: 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1400px;
+      background: #fff;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #374151;
+      font-size: 14px;
+      letter-spacing: .1px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 11px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background .2s ease;
+    }
+
+    .btn:hover { background: var(--primary-dark); }
+
+    .btn.grey {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .btn.danger { background: var(--danger); }
+
+    .btn.orange {
+      background: #f59e0b;
+      animation: pulse 1.3s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+      100% { box-shadow: 0 0 0 13px rgba(245, 158, 11, 0); }
+    }
+
+    .status-pill {
+      display: inline-flex;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+
+    .comment-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .comment-form input {
+      width: 100%;
+      min-width: 180px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .delete-form { margin: 0; }
+
+    dialog {
+      border: none;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      width: min(96vw, 560px);
+      padding: 0;
+    }
+
+    dialog::backdrop { background: rgba(17, 24, 39, .35); }
+
+    #assignForm {
+      display: grid;
+      gap: 10px;
+      padding: 18px;
+    }
+
+    #assignForm h3 { margin: 0 0 4px; }
+
+    #assignForm input,
+    #assignForm select {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-light {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 760px) {
+      .header {
+        flex-wrap: wrap;
+        padding: 14px;
+      }
+      .header h1 { font-size: 26px; }
+      .logo { width: 68px; height: 68px; }
+      .page { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
+      <div>
+        <h1>Onglet À traiter</h1>
+        <p class="subtitle">Gestion et traitement des nouveaux dossiers CNAPS.</p>
+      </div>
+    </div>
+    <a class="back-link" href="/">← Retour au tableau principal</a>
+  </header>
+
+  <main class="page">
+    <section class="card">
+      <h2 class="card-title">Demandes en attente d'affectation</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Prénom</th>
+              <th>Affecter une formation</th>
+              <th>Formation</th>
+              <th>Dates de formation</th>
+              <th>Générer attestation</th>
+              <th>Gérer les documents</th>
+              <th>Télécharger les documents</th>
+              <th>Statut CNAPS</th>
+              <th>Ajouter un commentaire / Supprimer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in requests %}
+              <tr>
+                <td>{{ r.nom }}</td>
+                <td>{{ r.prenom }}</td>
+                <td>
+                  {% if r.formation and r.session_date %}
+                    <button class="btn grey" disabled>Affectée</button>
+                  {% else %}
+                    <button class="btn" onclick="openAssign({{ r.id }})">Affecter une formation</button>
+                  {% endif %}
+                </td>
+                <td>{{ r.formation or '-' }}</td>
+                <td>{{ r.session_date or '-' }}</td>
+                <td>
+                  {% if r.dossier_id and r.formation %}
+                    <a class="btn" href="/attestation/{{ r.dossier_id }}">Générer</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td><a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a></td>
+                <td><a class="btn" href="/a-traiter/{{ r.id }}/download">Télécharger les documents</a></td>
+                <td><span class="status-pill">{{ r.statut_cnaps or 'A TRAITER' }}</span></td>
+                <td>
+                  <form class="comment-form" action="/commentaire/{{ r.dossier_id }}" method="post">
+                    <input name="commentaire" placeholder="Commentaire">
+                    <button class="btn" type="submit">Ajouter</button>
+                  </form>
+                  <form class="delete-form" action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')">
+                    <button class="btn danger" type="submit">Supprimer</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="assignDialog">
+    <form id="assignForm" method="post">
+      <h3>Affecter une formation</h3>
+      <label for="formation">Formation</label>
+      <select id="formation" name="formation" required>
+        <option value="APS">APS</option>
+        <option value="A3P">A3P</option>
+      </select>
+      <label for="session_date">Date</label>
+      <input id="session_date" type="text" name="session_date" required placeholder="Ex: Du 5 janvier au 6 février 2026">
+      <div class="dialog-actions">
+        <button class="btn" type="submit">Valider</button>
+        <button class="btn-light" type="button" onclick="assignDialog.close()">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const assignDialog = document.getElementById('assignDialog');
+    const assignForm = document.getElementById('assignForm');
+
+    function openAssign(id) {
+      assignForm.action = `/a-traiter/${id}/assign`;
+      assignDialog.showModal();
+    }
+  </script>
+</body>
+</html>
