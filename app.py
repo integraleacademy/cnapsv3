@@ -703,9 +703,23 @@ def a_traiter():
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT pr.*, d.statut_cnaps
+            SELECT
+                pr.*,
+                d.statut_cnaps,
+                d.commentaire,
+                COALESCE(doc_stats.total_docs, 0) AS total_docs,
+                COALESCE(doc_stats.conformes, 0) AS conformes
             FROM public_requests pr
             LEFT JOIN dossiers d ON d.id = pr.dossier_id
+            LEFT JOIN (
+                SELECT
+                    request_id,
+                    COUNT(*) AS total_docs,
+                    SUM(CASE WHEN is_conforme = 1 THEN 1 ELSE 0 END) AS conformes
+                FROM request_documents
+                WHERE is_active = 1
+                GROUP BY request_id
+            ) doc_stats ON doc_stats.request_id = pr.id
             ORDER BY pr.id DESC
             """
         ).fetchall()
