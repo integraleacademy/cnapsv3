@@ -169,6 +169,11 @@ def _get_statuts_dates(conn, dossier_id):
     return {row["statut_cnaps"]: row["changed_at"] for row in rows}
 
 
+def _table_has_column(conn, table_name, column_name):
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    return column_name in columns
+
+
 init_db()
 
 def login_required(view):
@@ -809,13 +814,14 @@ def public_form():
 def a_traiter():
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
+        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 pr.*,
                 d.statut_cnaps,
                 d.commentaire,
-                d.telephone,
+                {telephone_expr} AS telephone,
                 COALESCE(doc_stats.total_docs, 0) AS total_docs,
                 COALESCE(doc_stats.conformes, 0) AS conformes,
                 COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
@@ -859,9 +865,10 @@ def update_espace_cnaps(request_id):
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
+        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
         req = conn.execute(
-            """
-            SELECT pr.*, d.telephone
+            f"""
+            SELECT pr.*, {telephone_expr} AS telephone
             FROM public_requests pr
             LEFT JOIN dossiers d ON d.id = pr.dossier_id
             WHERE pr.id = ?
