@@ -828,6 +828,9 @@ def review_documents(request_id):
                 (is_conforme, reason, reviewed_at, doc_id),
             )
 
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return ("", 204)
+
     return redirect(url_for("request_documents", request_id=request_id))
 
 

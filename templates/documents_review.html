@@ -262,6 +262,21 @@
       background: #c2410c;
       transform: translateY(-1px);
     }
+
+    .autosave-status {
+      margin: 0 0 16px;
+      font-size: 14px;
+      min-height: 20px;
+      color: #64748b;
+    }
+
+    .autosave-status.success {
+      color: #15803d;
+    }
+
+    .autosave-status.error {
+      color: #b91c1c;
+    }
   </style>
 </head>
 <body>
@@ -273,8 +288,9 @@
 
     <h1>Documents de {{ req.prenom }} {{ req.nom }}</h1>
     <p class="subtitle">Sélectionnez un statut clair pour chaque document puis enregistrez ou notifiez les non-conformités.</p>
+    <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
 
-    <form method="post" action="/a-traiter/{{ req.id }}/documents/review">
+    <form id="review-form" method="post" action="/a-traiter/{{ req.id }}/documents/review">
       {% for doc_type, docs in grouped.items() %}
         <h2 class="group-title">{{ doc_labels.get(doc_type, doc_type) }}</h2>
         {% for d in docs %}
@@ -310,5 +326,52 @@
       <button class="btn-warning" type="submit">Notifier les non-conformités</button>
     </form>
   </div>
+
+  <script>
+    const reviewForm = document.getElementById('review-form');
+    const autosaveStatus = document.getElementById('autosave-status');
+    const reasonInputs = reviewForm.querySelectorAll('.reason');
+    const radioInputs = reviewForm.querySelectorAll('input[type="radio"]');
+    let pendingReasonSave;
+
+    const setAutosaveStatus = (message, cssClass = '') => {
+      autosaveStatus.textContent = message;
+      autosaveStatus.className = `autosave-status ${cssClass}`.trim();
+    };
+
+    const autosave = async () => {
+      setAutosaveStatus('Enregistrement en cours...');
+
+      try {
+        const response = await fetch(reviewForm.action, {
+          method: 'POST',
+          body: new FormData(reviewForm),
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Échec de sauvegarde');
+        }
+
+        setAutosaveStatus('✅ Changements enregistrés.', 'success');
+      } catch (error) {
+        setAutosaveStatus('❌ Impossible d\'enregistrer. Réessayez.', 'error');
+      }
+    };
+
+    radioInputs.forEach((input) => {
+      input.addEventListener('change', autosave);
+    });
+
+    reasonInputs.forEach((input) => {
+      input.addEventListener('input', () => {
+        clearTimeout(pendingReasonSave);
+        pendingReasonSave = setTimeout(autosave, 700);
+      });
+      input.addEventListener('blur', autosave);
+    });
+  </script>
 </body>
 </html>
