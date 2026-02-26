@@ -216,15 +216,8 @@ init_db()
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        # Si pas connecté -> JSON 401 pour les appels AJAX/API, sinon redirection vers /login
+        # Si pas connecté -> redirection vers /login
         if not session.get("user"):
-            wants_json = (
-                request.is_json
-                or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.accept_mimetypes.best == "application/json"
-            )
-            if wants_json:
-                return jsonify({"ok": False, "error": "Authentification requise"}), 401
             return redirect(url_for("login", next=request.path))
         return view(*args, **kwargs)
     return wrapped
