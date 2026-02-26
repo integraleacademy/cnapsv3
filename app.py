@@ -513,8 +513,8 @@ def attestation_pdf(id):
     stagiaire = get_stagiaire_by_id(id)
     if not stagiaire:
         return "Stagiaire introuvable", 404
-    formation = stagiaire["formation"]
-    if formation not in ["APS", "A3P"]:
+    formation = _formation_code(stagiaire["formation"])
+    if not formation:
         return "Type de formation non pris en charge", 400
     template_name = f"attestation_{formation.lower()}.html"
     html = render_template(template_name, stagiaire=stagiaire)
@@ -863,6 +863,19 @@ def _formation_full_name(formation: str):
     }.get(formation or "", formation or "votre formation")
 
 
+def _formation_code(formation: str):
+    normalized = (formation or "").strip().upper()
+    if normalized in {"APS", "A3P"}:
+        return normalized
+
+    if "A3P" in normalized:
+        return "A3P"
+    if "APS" in normalized:
+        return "APS"
+
+    return ""
+
+
 def _dracar_password(lastname: str, birth_date: str):
     nom = (lastname or "").strip()
     if nom:
@@ -964,6 +977,10 @@ def _file_size_bytes(file_storage):
 
 @app.route("/public-form", methods=["GET", "POST"])
 def public_form():
+    def _render_with_error(message: str):
+        flash(message, "public_error")
+        return render_template("public_form.html", form_data=request.form)
+
     if request.method == "GET":
         return render_template("public_form.html")
 
@@ -971,28 +988,28 @@ def public_form():
     prenom = (request.form.get("prenom") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     email_confirm = (request.form.get("email_confirm") or "").strip().lower()
+    telephone = (request.form.get("telephone") or "").strip()
     date_naissance = (request.form.get("date_naissance") or "").strip()
     heberge = 1 if request.form.get("heberge") == "on" else 0
     non_francais = 1 if request.form.get("non_francais") == "on" else 0
 
-    if not all([nom, prenom, email, email_confirm, date_naissance]):
-        flash("Tous les champs personnels sont obligatoires.", "public_error")
-        return redirect(url_for("public_form"))
+    if not all([nom, prenom, email, email_confirm, telephone, date_naissance]):
+        return _render_with_error("Tous les champs personnels sont obligatoires.")
 
     if email != email_confirm:
-        flash("L'email et sa confirmation doivent être identiques.", "public_error")
-        return redirect(url_for("public_form"))
+        return _render_with_error("L'email et sa confirmation doivent être identiques.")
+
+    if not normalize_phone_for_sms(telephone):
+        return _render_with_error("Le numéro de téléphone portable est invalide.")
 
     try:
         datetime.strptime(date_naissance, "%d/%m/%Y")
     except ValueError:
-        flash("La date de naissance doit être au format DD/MM/YYYY.", "public_error")
-        return redirect(url_for("public_form"))
+        return _render_with_error("La date de naissance doit être au format DD/MM/YYYY.")
 
     for item in CHECKLIST_LABELS:
         if request.form.get(item) != "on":
-            flash("Vous devez cocher toutes les cases de conformité.", "public_error")
-            return redirect(url_for("public_form"))
+            return _render_with_error("Vous devez cocher toutes les cases de conformité.")
 
     required = _required_doc_types(heberge, non_francais)
     uploaded = {}
@@ -1000,27 +1017,33 @@ def public_form():
         files = request.files.getlist(doc_type)
         cleaned = [f for f in files if f and f.filename]
         if not cleaned:
-            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "public_error")
-            return redirect(url_for("public_form"))
+            return _render_with_error(f"Document manquant : {DOC_LABELS[doc_type]}")
         for f in cleaned:
             filename = (f.filename or "").lower()
             if not filename.endswith(".pdf"):
-                flash(f"Le document {f.filename} doit être au format PDF.", "public_error")
-                return redirect(url_for("public_form"))
+                return _render_with_error(f"Le document {f.filename} doit être au format PDF.")
             if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
-                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
-                return redirect(url_for("public_form"))
+                return _render_with_error(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.")
         uploaded[doc_type] = cleaned
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        cur = conn.execute(
-            """
-            INSERT INTO dossiers (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (nom, prenom, "", "", "", "INCOMPLET", "Dossier reçu via formulaire public", "A TRAITER"),
-        )
+        if _table_has_column(conn, "dossiers", "telephone"):
+            cur = conn.execute(
+                """
+                INSERT INTO dossiers (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps, telephone)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (nom, prenom, "", "", "", "INCOMPLET", "Dossier reçu via formulaire public", "A TRAITER", telephone),
+            )
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO dossiers (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (nom, prenom, "", "", "", "INCOMPLET", "Dossier reçu via formulaire public", "A TRAITER"),
+            )
         dossier_id = cur.lastrowid
 
         cur = conn.execute(
@@ -1522,8 +1545,9 @@ def download_full_bundle(request_id):
             if os.path.exists(source):
                 zf.write(source, arcname)
 
-        if dossier and dossier["formation"] in ["APS", "A3P"]:
-            html = render_template(f"attestation_{dossier['formation'].lower()}.html", stagiaire=dossier)
+        formation = _formation_code(dossier["formation"] if dossier else req["formation"])
+        if formation:
+            html = render_template(f"attestation_{formation.lower()}.html", stagiaire=dossier or req)
             pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()
             zf.writestr(f"attestation_preinscription_{safe_nom}.pdf", pdf)
 
