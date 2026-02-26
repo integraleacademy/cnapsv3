@@ -287,7 +287,7 @@
     </div>
 
     <h1>Documents de {{ req.prenom }} {{ req.nom }}</h1>
-    <p class="subtitle">Sélectionnez un statut clair pour chaque document puis enregistrez ou notifiez les non-conformités.</p>
+    <p class="subtitle">Sélectionnez un statut clair pour chaque document puis notifiez les non-conformités.</p>
     <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
 
     <form id="review-form" method="post" action="/a-traiter/{{ req.id }}/documents/review">
@@ -299,16 +299,20 @@
 
             <div class="status-row">
               <label>
-                <input type="radio" name="status_{{ d.id }}" value="pending" {% if d.is_conforme is none %}checked{% endif %}>
+                <input type="radio" name="status_{{ d.id }}" value="pending" {% if d.review_status == 'pending' or (d.review_status is none and d.is_conforme is none) %}checked{% endif %}>
                 <span class="status-pill pending">⏳ En attente de traitement</span>
               </label>
               <label>
-                <input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.is_conforme==1 %}checked{% endif %}>
+                <input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.review_status == 'conforme' or (d.review_status is none and d.is_conforme==1) %}checked{% endif %}>
                 <span class="status-pill conforme">✅ Conforme</span>
               </label>
               <label>
-                <input type="radio" name="status_{{ d.id }}" value="non_conforme" {% if d.is_conforme==0 %}checked{% endif %}>
+                <input type="radio" name="status_{{ d.id }}" value="non_conforme" {% if d.review_status == 'non_conforme' or (d.review_status is none and d.is_conforme==0) %}checked{% endif %}>
                 <span class="status-pill non-conforme">❌ Non conforme</span>
+              </label>
+              <label>
+                <input type="radio" name="status_{{ d.id }}" value="notified_expected" {% if d.review_status == 'notified_expected' %}checked{% endif %}>
+                <span class="status-pill pending">📩 Notifié, nouveau document attendu</span>
               </label>
             </div>
 
@@ -316,10 +320,6 @@
           </div>
         {% endfor %}
       {% endfor %}
-
-      <div class="actions">
-        <button class="btn-primary" type="submit">Enregistrer la conformité</button>
-      </div>
     </form>
 
     <form method="post" action="/a-traiter/{{ req.id }}/notify" class="actions">
