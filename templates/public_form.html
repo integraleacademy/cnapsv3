@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dépôt dossier CNAPS</title>
+  <style>
+    body{font-family:Inter,Arial,sans-serif;background:#f4f7fb;margin:0}
+    .wrap{max-width:960px;margin:30px auto;background:#fff;padding:28px;border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,.08)}
+    h1,h2{margin-top:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    label{display:block;font-weight:600;margin:8px 0 4px}
+    input,button{width:100%;padding:11px;border:1px solid #d2d7e2;border-radius:10px}
+    .section{margin:24px 0;padding:16px;border:1px solid #e7ebf4;border-radius:12px}
+    .checks label{font-weight:500;display:flex;gap:8px;align-items:flex-start}
+    .inline{display:flex;gap:10px;align-items:center;margin:10px 0}
+    .hidden{display:none}
+    .btn{background:#2d6cdf;color:#fff;font-weight:700;border:none;cursor:pointer}
+    .hint{font-size:13px;color:#6b7280}
+    .flash{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;margin-bottom:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Formulaire public CNAPS</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post" enctype="multipart/form-data">
+      <div class="section">
+        <h2>1) Informations personnelles</h2>
+        <div class="grid">
+          <div><label>Nom</label><input name="nom" required></div>
+          <div><label>Prénom</label><input name="prenom" required></div>
+          <div><label>Mail</label><input type="email" name="email" required></div>
+          <div><label>Confirmation mail</label><input type="email" name="email_confirm" required></div>
+          <div><label>Date de naissance (DD/MM/YYYY)</label><input name="date_naissance" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" required></div>
+        </div>
+      </div>
+      <div class="section">
+        <h2>2) Documents à déposer</h2>
+        <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
+        <input type="file" name="identity" multiple required>
+        <label>Justificatif de domicile de moins de 3 mois</label>
+        <p class="hint">Uniquement facture gaz/électricité/eau ou quittance de loyer (pas téléphone).</p>
+        <input type="file" name="proof_address" required>
+      </div>
+      <div class="section">
+        <h2>3) Documents complémentaires</h2>
+        <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto"><label for="heberge">Si vous êtes hébergé(e)</label></div>
+        <div id="heberge_bloc" class="hidden">
+          <label>HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
+          <input type="file" name="host_identity" multiple>
+          <label>Attestation d'hébergement signée</label>
+          <p class="hint">Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank">service-public.gouv.fr</a></p>
+          <input type="file" name="hosting_certificate">
+        </div>
+        <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto"><label for="non_francais">Si vous n'avez pas la nationalité française</label></div>
+        <div id="non_francais_bloc" class="hidden">
+          <label>Casier judiciaire du pays de naissance (moins de 3 mois, traduit)</label>
+          <input type="file" name="criminal_record">
+          <label>Diplôme français supérieur au brevet ou Test TCF officiel (moins de 2 ans)</label>
+          <input type="file" name="french_diploma_tcf">
+        </div>
+      </div>
+      <div class="section checks">
+        <h2>4) 🔍 Contrôle de conformité</h2>
+        {% for item in [
+          "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
+          "Les documents que j'ai fourni sont bien LISIBLES et ne sont pas flous.",
+          "Mon justificatif de domicile a bien MOINS DE 3 MOIS.",
+          "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
+          "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
+          "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée."
+        ] %}
+        <label><input type="checkbox" name="{{ item }}" style="width:auto" required> {{ item }}</label>
+        {% endfor %}
+      </div>
+      <div class="section">
+        <h2>5) ENVOYER MA DEMANDE</h2>
+        <button class="btn" type="submit">Envoyer ma demande</button>
+      </div>
+    </form>
+  </div>
+  <script>
+    const heberge=document.getElementById('heberge'), hb=document.getElementById('heberge_bloc');
+    const nonFr=document.getElementById('non_francais'), nb=document.getElementById('non_francais_bloc');
+    function sync(){hb.classList.toggle('hidden',!heberge.checked);nb.classList.toggle('hidden',!nonFr.checked);
+      ['host_identity','hosting_certificate'].forEach(n=>document.querySelector(`[name="${n}"]`).required=heberge.checked);
+      ['criminal_record','french_diploma_tcf'].forEach(n=>document.querySelector(`[name="${n}"]`).required=nonFr.checked);
+    }
+    heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
+  </script>
+</body>
+</html>

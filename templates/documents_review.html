@@ -1,0 +1,17 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Gérer les documents</title><style>body{font-family:Arial;background:#f3f4f6}.wrap{max-width:960px;margin:20px auto;background:#fff;padding:20px;border-radius:12px}.doc{border:1px solid #e5e7eb;padding:12px;border-radius:10px;margin:10px 0}</style></head><body><div class="wrap"><a href="/a-traiter">← Retour</a><h2>Documents de {{ req.prenom }} {{ req.nom }}</h2>
+<form method="post" action="/a-traiter/{{ req.id }}/documents/review">
+{% for doc_type, docs in grouped.items() %}
+  <h3>{{ doc_labels.get(doc_type, doc_type) }}</h3>
+  {% for d in docs %}
+    <div class="doc">
+      <a href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank">{{ d.original_name }}</a><br>
+      <label><input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.is_conforme==1 %}checked{% endif %}> Conforme</label>
+      <label><input type="radio" name="status_{{ d.id }}" value="non_conforme" {% if d.is_conforme==0 %}checked{% endif %}> Non conforme</label>
+      <input name="reason_{{ d.id }}" value="{{ d.non_conformite_reason or '' }}" placeholder="Pourquoi non conforme ?" style="width:100%;padding:8px;margin-top:6px">
+    </div>
+  {% endfor %}
+{% endfor %}
+<button type="submit">Enregistrer la conformité</button>
+</form>
+<form method="post" action="/a-traiter/{{ req.id }}/notify" style="margin-top:12px"><button type="submit">Notifier les non conformités</button></form>
+</div></body></html>

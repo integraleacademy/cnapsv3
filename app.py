@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, make_response, send_file, session, flash, url_for
+from flask import Flask, render_template, request, redirect, make_response, send_file, session, flash, url_for, jsonify, send_from_directory, abort
 from weasyprint import HTML
 import sqlite3
 import os
@@ -9,6 +9,11 @@ from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import check_password_hash
 import unicodedata
+import uuid
+import zipfile
+from io import BytesIO
+from email.message import EmailMessage
+import smtplib
 
 
 
@@ -33,15 +38,22 @@ app.config.update(
 # Identifiants admin (via variables Render)
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower().strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-PUBLIC_FORM_URL = os.getenv("PUBLIC_FORM_URL", "https://cnapsv5.onrender.com/")
-
+PUBLIC_FORM_URL = os.getenv("PUBLIC_FORM_URL", "https://cnapsv3.onrender.com/public-form")
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@integrale-academy.fr")
 
 DB_NAME = "/mnt/data/cnaps.db"
+UPLOAD_DIR = "/mnt/data/uploads"
 
 
 def init_db():
     """Crée les structures nécessaires pour historiser les statuts CNAPS."""
     os.makedirs(os.path.dirname(DB_NAME), exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS statut_cnaps_history (
@@ -50,6 +62,50 @@ def init_db():
                 statut_cnaps TEXT NOT NULL,
                 changed_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS public_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dossier_id INTEGER,
+                nom TEXT NOT NULL,
+                prenom TEXT NOT NULL,
+                email TEXT NOT NULL,
+                date_naissance TEXT NOT NULL,
+                heberge INTEGER NOT NULL DEFAULT 0,
+                non_francais INTEGER NOT NULL DEFAULT 0,
+                formation TEXT,
+                session_date TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS request_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                doc_type TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                storage_path TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_conforme INTEGER,
+                non_conformite_reason TEXT,
+                uploaded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                reviewed_at TEXT,
+                FOREIGN KEY (request_id) REFERENCES public_requests(id) ON DELETE CASCADE
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS request_non_conformity_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY (request_id) REFERENCES public_requests(id) ON DELETE CASCADE
             )
         """)
 
@@ -144,6 +200,8 @@ def index():
 
         dossiers = cur.fetchall()
 
+        a_traiter_count = conn.execute("SELECT COUNT(*) FROM public_requests").fetchone()[0]
+
         # (Tu peux laisser ta partie recent_acceptes ici si tu veux)
         sept_jours = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         cur_acceptes = conn.execute("""
@@ -162,6 +220,7 @@ def index():
         filtre_cnaps=filtre_cnaps,
         statuts_disponibles=statuts_disponibles,
         public_form_url=PUBLIC_FORM_URL,
+        a_traiter_count=a_traiter_count,
     )
 
 
@@ -461,3 +520,352 @@ def lookup_cnaps():
 
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
+
+DOC_LABELS = {
+    "identity": "Pièce d'identité (recto/verso) ou passeport",
+    "proof_address": "Justificatif de domicile de moins de 3 mois",
+    "host_identity": "Pièce d'identité de l'hébergeant",
+    "hosting_certificate": "Attestation d'hébergement signée",
+    "criminal_record": "Casier judiciaire traduit",
+    "french_diploma_tcf": "Diplôme français supérieur au brevet ou TCF",
+}
+
+CHECKLIST_LABELS = [
+    "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
+    "Les documents que j'ai fourni sont bien LISIBLES et ne sont pas flous.",
+    "Mon justificatif de domicile a bien MOINS DE 3 MOIS.",
+    "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
+    "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
+    "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée.",
+]
+
+
+def _send_email_html(to_email: str, subject: str, html: str):
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
+        print(f"[EMAIL MOCK] to={to_email} subject={subject}")
+        print(html)
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+    msg.set_content("Votre client mail ne supporte pas le HTML.")
+    msg.add_alternative(html, subtype="html")
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(msg)
+
+
+def _required_doc_types(heberge: int, non_francais: int):
+    required = ["identity", "proof_address"]
+    if heberge:
+        required.extend(["host_identity", "hosting_certificate"])
+    if non_francais:
+        required.extend(["criminal_record", "french_diploma_tcf"])
+    return required
+
+
+def _secure_store(file_storage, subfolder):
+    original = file_storage.filename or "document"
+    ext = os.path.splitext(original)[1]
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    target_dir = os.path.join(UPLOAD_DIR, subfolder)
+    os.makedirs(target_dir, exist_ok=True)
+    absolute_path = os.path.join(target_dir, safe_name)
+    file_storage.save(absolute_path)
+    return original, safe_name, os.path.relpath(absolute_path, UPLOAD_DIR)
+
+
+@app.route("/public-form", methods=["GET", "POST"])
+def public_form():
+    if request.method == "GET":
+        return render_template("public_form.html")
+
+    nom = (request.form.get("nom") or "").strip()
+    prenom = (request.form.get("prenom") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    email_confirm = (request.form.get("email_confirm") or "").strip().lower()
+    date_naissance = (request.form.get("date_naissance") or "").strip()
+    heberge = 1 if request.form.get("heberge") == "on" else 0
+    non_francais = 1 if request.form.get("non_francais") == "on" else 0
+
+    if not all([nom, prenom, email, email_confirm, date_naissance]):
+        flash("Tous les champs personnels sont obligatoires.", "error")
+        return redirect(url_for("public_form"))
+
+    if email != email_confirm:
+        flash("L'email et sa confirmation doivent être identiques.", "error")
+        return redirect(url_for("public_form"))
+
+    try:
+        datetime.strptime(date_naissance, "%d/%m/%Y")
+    except ValueError:
+        flash("La date de naissance doit être au format DD/MM/YYYY.", "error")
+        return redirect(url_for("public_form"))
+
+    for item in CHECKLIST_LABELS:
+        if request.form.get(item) != "on":
+            flash("Vous devez cocher toutes les cases de conformité.", "error")
+            return redirect(url_for("public_form"))
+
+    required = _required_doc_types(heberge, non_francais)
+    uploaded = {}
+    for doc_type in required:
+        files = request.files.getlist(doc_type)
+        cleaned = [f for f in files if f and f.filename]
+        if not cleaned:
+            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "error")
+            return redirect(url_for("public_form"))
+        uploaded[doc_type] = cleaned
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(
+            """
+            INSERT INTO dossiers (nom, prenom, formation, session, lien, statut, commentaire, statut_cnaps)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (nom, prenom, "", "", "", "INCOMPLET", "Dossier reçu via formulaire public", "A TRAITER"),
+        )
+        dossier_id = cur.lastrowid
+
+        cur = conn.execute(
+            """
+            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais),
+        )
+        request_id = cur.lastrowid
+
+        for doc_type, files in uploaded.items():
+            for f in files:
+                original, stored, rel_path = _secure_store(f, str(request_id))
+                conn.execute(
+                    """
+                    INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (request_id, doc_type, original, stored, rel_path),
+                )
+
+    email_html = render_template("emails/confirmation_depot.html", prenom=prenom)
+    _send_email_html(
+        email,
+        "Confirmation de dépôt dossier CNAPS",
+        email_html,
+    )
+
+    return render_template("public_form_success.html", prenom=prenom)
+
+
+@app.route("/a-traiter")
+@login_required
+def a_traiter():
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT pr.*, d.statut_cnaps
+            FROM public_requests pr
+            LEFT JOIN dossiers d ON d.id = pr.dossier_id
+            ORDER BY pr.id DESC
+            """
+        ).fetchall()
+
+    return render_template("a_traiter.html", requests=rows)
+
+
+@app.route("/a-traiter/<int:request_id>/assign", methods=["POST"])
+@login_required
+def assign_formation(request_id):
+    formation = (request.form.get("formation") or "").strip()
+    session_date = (request.form.get("session_date") or "").strip()
+    if formation not in ["APS", "A3P"] or not session_date:
+        return jsonify({"ok": False, "error": "Paramètres invalides"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT dossier_id FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        conn.execute(
+            "UPDATE public_requests SET formation = ?, session_date = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (formation, session_date, request_id),
+        )
+        if req["dossier_id"]:
+            conn.execute(
+                "UPDATE dossiers SET formation = ?, session = ? WHERE id = ?",
+                (formation, session_date, req["dossier_id"]),
+            )
+
+    if request.is_json:
+        return jsonify({"ok": True})
+    return redirect(url_for("a_traiter"))
+
+
+@app.route("/a-traiter/<int:request_id>/documents")
+@login_required
+def request_documents(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            abort(404)
+
+        docs = conn.execute(
+            """
+            SELECT * FROM request_documents
+            WHERE request_id = ? AND is_active = 1
+            ORDER BY doc_type, id DESC
+            """,
+            (request_id,),
+        ).fetchall()
+
+    grouped = {}
+    for d in docs:
+        grouped.setdefault(d["doc_type"], []).append(d)
+
+    return render_template("documents_review.html", req=req, grouped=grouped, doc_labels=DOC_LABELS)
+
+
+@app.route("/uploads/<int:request_id>/<path:filename>")
+@login_required
+def serve_upload(request_id, filename):
+    folder = os.path.join(UPLOAD_DIR, str(request_id))
+    return send_from_directory(folder, filename, as_attachment=False)
+
+
+@app.route("/a-traiter/<int:request_id>/documents/review", methods=["POST"])
+@login_required
+def review_documents(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        docs = conn.execute("SELECT id FROM request_documents WHERE request_id = ? AND is_active = 1", (request_id,)).fetchall()
+        for d in docs:
+            doc_id = d["id"]
+            status = request.form.get(f"status_{doc_id}")
+            reason = (request.form.get(f"reason_{doc_id}") or "").strip()
+            is_conforme = None
+            if status == "conforme":
+                is_conforme = 1
+                reason = ""
+            elif status == "non_conforme":
+                is_conforme = 0
+            conn.execute(
+                "UPDATE request_documents SET is_conforme = ?, non_conformite_reason = ?, reviewed_at = datetime('now','localtime') WHERE id = ?",
+                (is_conforme, reason, doc_id),
+            )
+
+    return redirect(url_for("request_documents", request_id=request_id))
+
+
+@app.route("/a-traiter/<int:request_id>/notify", methods=["POST"])
+@login_required
+def notify_non_conformities(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        docs = conn.execute(
+            """
+            SELECT * FROM request_documents
+            WHERE request_id = ? AND is_active = 1 AND is_conforme = 0
+            ORDER BY doc_type, id DESC
+            """,
+            (request_id,),
+        ).fetchall()
+
+        if not req or not docs:
+            return redirect(url_for("request_documents", request_id=request_id))
+
+        token = uuid.uuid4().hex
+        replace_url = url_for("replace_documents", request_id=request_id, _external=True)
+        html = render_template("emails/non_conformite.html", prenom=req["prenom"], docs=docs, labels=DOC_LABELS, replace_url=replace_url)
+        _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
+
+        conn.execute("INSERT INTO request_non_conformity_notifications (request_id) VALUES (?)", (request_id,))
+
+    return redirect(url_for("request_documents", request_id=request_id))
+
+
+@app.route("/replace-documents/<int:request_id>", methods=["GET", "POST"])
+def replace_documents(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            abort(404)
+
+        if request.method == "POST":
+            invalids = conn.execute(
+                "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1 AND is_conforme = 0",
+                (request_id,),
+            ).fetchall()
+            replaced = 0
+            for doc in invalids:
+                incoming = request.files.get(f"replace_{doc['id']}")
+                if incoming and incoming.filename:
+                    conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
+                    original, stored, rel_path = _secure_store(incoming, str(request_id))
+                    conn.execute(
+                        """
+                        INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (request_id, doc["doc_type"], original, stored, rel_path),
+                    )
+                    replaced += 1
+            if replaced:
+                conn.execute("UPDATE public_requests SET updated_at = datetime('now','localtime') WHERE id = ?", (request_id,))
+            return render_template("replace_documents_success.html", replaced=replaced)
+
+        invalids = conn.execute(
+            "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1 AND is_conforme = 0",
+            (request_id,),
+        ).fetchall()
+
+    return render_template("replace_documents.html", req=req, invalids=invalids, labels=DOC_LABELS)
+
+
+@app.route("/a-traiter/<int:request_id>/download")
+@login_required
+def download_full_bundle(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            abort(404)
+
+        docs = conn.execute(
+            "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1",
+            (request_id,),
+        ).fetchall()
+
+        if not docs or any(d["is_conforme"] != 1 for d in docs):
+            return "Tous les documents doivent être conformes avant téléchargement.", 400
+
+        dossier = conn.execute("SELECT * FROM dossiers WHERE id = ?", (req["dossier_id"],)).fetchone()
+
+    memory_file = BytesIO()
+    safe_nom = f"{req['prenom']}_{req['nom']}".replace(" ", "_")
+
+    with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, doc in enumerate(docs, start=1):
+            source = os.path.join(UPLOAD_DIR, doc["storage_path"])
+            label = DOC_LABELS.get(doc["doc_type"], doc["doc_type"])
+            ext = os.path.splitext(doc["original_name"])[1]
+            arcname = f"{i:02d}_{label}_{safe_nom}{ext}".replace(" ", "_")
+            if os.path.exists(source):
+                zf.write(source, arcname)
+
+        if dossier and dossier["formation"] in ["APS", "A3P"]:
+            html = render_template(f"attestation_{dossier['formation'].lower()}.html", stagiaire=dossier)
+            pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()
+            zf.writestr(f"attestation_preinscription_{safe_nom}.pdf", pdf)
+
+    memory_file.seek(0)
+    return send_file(memory_file, as_attachment=True, download_name=f"dossier_cnaps_{safe_nom}.zip", mimetype="application/zip")
