@@ -222,8 +222,19 @@
         <td>
           <div style="font-size:13px;line-height:1.5;">
             <div><strong>Login :</strong> {{ r.email }}</div>
-            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' }}</span></div>
-            <a href="{{ dracar_auth_url }}" target="_blank" rel="noopener">Lien Espace DRACAR</a>
+            {% set dracar_password = (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' %}
+            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ dracar_password }}</span></div>
+            <a
+              href="{{ dracar_auth_url }}"
+              target="_blank"
+              rel="noopener"
+              class="dracar-link"
+              data-login="{{ r.email }}"
+              data-password="{{ dracar_password }}"
+            >
+              Lien Espace DRACAR
+            </a>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Le mot de passe est copié automatiquement au clic.</div>
           </div>
         </td>
         <td>
@@ -375,6 +386,47 @@ document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   });
 
   input.addEventListener('blur', save);
+});
+
+document.querySelectorAll('.dracar-link').forEach(link => {
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+
+    const login = link.dataset.login || '';
+    const password = link.dataset.password || '';
+    const rawUrl = link.getAttribute('href');
+    if (!rawUrl) return;
+
+    let dracarUrl;
+    try {
+      dracarUrl = new URL(rawUrl, window.location.origin);
+      if (login) {
+        dracarUrl.searchParams.set('login_hint', login);
+      }
+    } catch {
+      window.open(rawUrl, '_blank', 'noopener');
+      return;
+    }
+
+    window.open(dracarUrl.toString(), '_blank', 'noopener');
+
+    const passwordToCopy = password;
+    const canUseClipboard = navigator.clipboard && window.isSecureContext && Boolean(passwordToCopy);
+
+    if (canUseClipboard) {
+      navigator.clipboard
+        .writeText(passwordToCopy)
+        .then(() => {
+          window.alert('Mot de passe DRACAR copié. Collez-le dans le champ avec Ctrl+V.');
+        })
+        .catch(() => {
+          window.prompt('Copiez uniquement le mot de passe DRACAR :', passwordToCopy);
+        });
+      return;
+    }
+
+    window.prompt('Copiez uniquement le mot de passe DRACAR :', passwordToCopy);
+  });
 });
 </script>
 </body>
