@@ -222,8 +222,18 @@
         <td>
           <div style="font-size:13px;line-height:1.5;">
             <div><strong>Login :</strong> {{ r.email }}</div>
-            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' }}</span></div>
-            <a href="{{ dracar_auth_url }}" target="_blank" rel="noopener">Lien Espace DRACAR</a>
+            {% set dracar_password = (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' %}
+            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ dracar_password }}</span></div>
+            <a
+              href="{{ dracar_auth_url }}"
+              target="_blank"
+              rel="noopener"
+              class="dracar-link"
+              data-login="{{ r.email }}"
+              data-password="{{ dracar_password }}"
+            >
+              Lien Espace DRACAR
+            </a>
           </div>
         </td>
         <td>
@@ -375,6 +385,34 @@ document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   });
 
   input.addEventListener('blur', save);
+});
+
+document.querySelectorAll('.dracar-link').forEach(link => {
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+
+    const login = link.dataset.login || '';
+    const password = link.dataset.password || '';
+    const rawUrl = link.getAttribute('href');
+    if (!rawUrl) return;
+
+    let dracarUrl;
+    try {
+      dracarUrl = new URL(rawUrl, window.location.origin);
+      if (login) {
+        dracarUrl.searchParams.set('login_hint', login);
+      }
+    } catch {
+      window.open(rawUrl, '_blank', 'noopener');
+      return;
+    }
+
+    if (navigator.clipboard && window.isSecureContext && (login || password)) {
+      navigator.clipboard.writeText(`Login : ${login}\nMot de passe : ${password}`).catch(() => {});
+    }
+
+    window.open(dracarUrl.toString(), '_blank', 'noopener');
+  });
 });
 </script>
 </body>
