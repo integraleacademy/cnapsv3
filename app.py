@@ -916,13 +916,12 @@ def _send_cnaps_reminders(conn, requests_rows):
 
         if first_due:
             if recipient_email:
-                html = (
-                    f"<p>Bonjour {req.get('prenom')},</p>"
-                    f"<p>Rappel : votre lien CNAPS pour la formation {formation_name} "
-                    f"expire le <strong>{expiration_label}</strong>.</p>"
-                    "<p>Merci de finaliser la validation de votre espace CNAPS rapidement.</p>"
+                html = render_template(
+                    "emails/espace_cnaps_rappel_4h.html",
+                    formation_name=formation_name,
+                    logo_url=url_for("static", filename="logo.png", _external=True),
                 )
-                _send_email_html(recipient_email, "Rappel CNAPS : expiration dans 4h", html)
+                _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
             _send_sms(
                 req.get("telephone"),
                 f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
@@ -934,13 +933,12 @@ def _send_cnaps_reminders(conn, requests_rows):
 
         if second_due:
             if recipient_email:
-                html = (
-                    f"<p>Bonjour {req.get('prenom')},</p>"
-                    f"<p><strong>Attention</strong> : votre lien CNAPS pour la formation {formation_name} "
-                    f"expire le <strong>{expiration_label}</strong>.</p>"
-                    "<p>Il reste moins de 2 heures pour valider votre espace CNAPS.</p>"
+                html = render_template(
+                    "emails/espace_cnaps_rappel_2h.html",
+                    formation_name=formation_name,
+                    logo_url=url_for("static", filename="logo.png", _external=True),
                 )
-                _send_email_html(recipient_email, "Attention CNAPS : expiration dans 2h", html)
+                _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
             _send_sms(
                 req.get("telephone"),
                 f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
