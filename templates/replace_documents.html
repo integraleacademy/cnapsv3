@@ -1,1 +1,91 @@
-<!doctype html><html><body style="font-family:Arial;background:#f3f4f6"><div style="max-width:760px;margin:30px auto;background:#fff;padding:20px;border-radius:12px"><h2>Remplacer vos documents non conformes</h2><form method="post" enctype="multipart/form-data">{% for d in invalids %}<div style="border:1px solid #ddd;padding:12px;border-radius:10px;margin:10px 0"><strong>{{ labels.get(d.doc_type, d.doc_type) }}</strong><p>Raison : {{ d.non_conformite_reason or 'Non précisée' }}</p><input type="file" name="replace_{{ d.id }}" required></div>{% endfor %}<button type="submit">Envoyer les nouveaux documents</button></form></div></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remplacer vos documents</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f3f4f6; margin:0; padding:24px; }
+    .card { max-width:760px; margin:0 auto; background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+    .doc { border:1px solid #ddd; padding:12px; border-radius:10px; margin:10px 0; }
+    .btn { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:10px 14px; cursor:pointer; }
+    .flash { border-radius:10px; padding:12px 14px; margin:0 0 12px; }
+    .flash.error { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+    .modal-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.55); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+    .modal { width:min(520px, 100%); background:#fff; border-radius:14px; padding:20px; box-shadow:0 20px 50px rgba(2,6,23,.35); }
+    .modal h3 { margin:0 0 10px; font-size:20px; }
+    .modal p { margin:0; color:#334155; line-height:1.5; }
+    .modal button { margin-top:16px; background:#0f172a; color:#fff; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Remplacer vos documents non conformes</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" enctype="multipart/form-data" id="replace-form">
+      {% for d in invalids %}
+      <div class="doc">
+        <strong>{{ labels.get(d.doc_type, d.doc_type) }}</strong>
+        <p>Raison : {{ d.non_conformite_reason or 'Non précisée' }}</p>
+        <input type="file" name="replace_{{ d.id }}" accept="application/pdf,.pdf" required>
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn">Envoyer les nouveaux documents</button>
+    </form>
+  </div>
+
+  <div class="modal-backdrop" id="size-modal" role="dialog" aria-modal="true" aria-labelledby="size-modal-title">
+    <div class="modal">
+      <h3 id="size-modal-title">Fichier trop volumineux</h3>
+      <p>Merci de télécharger un fichier PDF de moins de 5 MO.</p>
+      <button type="button" id="size-modal-close">Compris</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const MAX_BYTES = 5 * 1024 * 1024;
+      const form = document.getElementById('replace-form');
+      const modal = document.getElementById('size-modal');
+      const closeButton = document.getElementById('size-modal-close');
+
+      function showModal() {
+        modal.style.display = 'flex';
+      }
+
+      function hideModal() {
+        modal.style.display = 'none';
+      }
+
+      closeButton.addEventListener('click', hideModal);
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+          hideModal();
+        }
+      });
+
+      form.addEventListener('submit', (event) => {
+        const fileInputs = form.querySelectorAll('input[type="file"]');
+        for (const input of fileInputs) {
+          const file = input.files && input.files[0];
+          if (!file) continue;
+          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+          if (!isPdf || file.size > MAX_BYTES) {
+            event.preventDefault();
+            showModal();
+            return;
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

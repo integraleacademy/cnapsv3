@@ -1178,20 +1178,27 @@ def replace_documents(request_id):
         if not req:
             abort(404)
 
+        invalids = conn.execute(
+            """
+            SELECT * FROM request_documents
+            WHERE request_id = ?
+              AND is_active = 1
+              AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
+            """,
+            (request_id,),
+        ).fetchall()
+
         if request.method == "POST":
-            invalids = conn.execute(
-                """
-                SELECT * FROM request_documents
-                WHERE request_id = ?
-                  AND is_active = 1
-                  AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
-                """,
-                (request_id,),
-            ).fetchall()
+            if not invalids:
+                return render_template("replace_documents_already_sent.html")
+
             replaced = 0
             for doc in invalids:
                 incoming = request.files.get(f"replace_{doc['id']}")
                 if incoming and incoming.filename:
+                    if not incoming.filename.lower().endswith(".pdf"):
+                        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
                     if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
                         flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
                         return redirect(url_for("replace_documents", request_id=request_id))
@@ -1209,15 +1216,8 @@ def replace_documents(request_id):
                 conn.execute("UPDATE public_requests SET updated_at = datetime('now','localtime') WHERE id = ?", (request_id,))
             return render_template("replace_documents_success.html", replaced=replaced)
 
-        invalids = conn.execute(
-            """
-            SELECT * FROM request_documents
-            WHERE request_id = ?
-              AND is_active = 1
-              AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
-            """,
-            (request_id,),
-        ).fetchall()
+    if not invalids:
+        return render_template("replace_documents_already_sent.html")
 
     return render_template("replace_documents.html", req=req, invalids=invalids, labels=DOC_LABELS)
 
