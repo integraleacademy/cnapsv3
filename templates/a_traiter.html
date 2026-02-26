@@ -156,6 +156,24 @@
       min-height: 40px;
       cursor: pointer;
     }
+
+    .cnaps-expiration {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #1f2937;
+      line-height: 1.3;
+    }
+
+    .cnaps-expired-badge {
+      margin-top: 8px;
+      display: inline-block;
+      background: #dc2626;
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -244,6 +262,11 @@
             <option value="Créé" {% if espace == 'Créé' %}selected{% endif %}>Créé</option>
             <option value="Validé" {% if espace == 'Validé' %}selected{% endif %}>Validé</option>
           </select>
+          {% if espace == 'Créé' and r.cnaps_is_expired %}
+            <div class="cnaps-expired-badge">Lien CNAPS expiré</div>
+          {% elif espace == 'Créé' and r.cnaps_expiration_label %}
+            <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
+          {% endif %}
         </td>
         <td>
           <form action="/statut_cnaps/{{ r.dossier_id }}" method="post">
