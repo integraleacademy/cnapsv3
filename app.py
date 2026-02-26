@@ -879,7 +879,11 @@ def public_form():
                     (request_id, doc_type, original, stored, rel_path),
                 )
 
-    email_html = render_template("emails/confirmation_depot.html", prenom=prenom)
+    email_html = render_template(
+        "emails/confirmation_depot.html",
+        prenom=prenom,
+        logo_url=url_for("static", filename="logo.png", _external=True),
+    )
     _send_email_html(
         email,
         "Confirmation de dépôt dossier CNAPS",
