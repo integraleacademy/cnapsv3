@@ -2,40 +2,72 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Espace CNAPS créé</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,sans-serif;color:#1f2937;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fb;padding:24px 0;">
+<body style="margin:0;padding:0;background:#eef2ff;font-family:Arial,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2ff;padding:28px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);">
+        <table role="presentation" width="680" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 28px rgba(30,64,175,.15);">
           <tr>
-            <td style="background:#1d4ed8;padding:20px 24px;color:#fff;">
-              <h2 style="margin:0;font-size:22px;">Intégrale Academy</h2>
-              <p style="margin:6px 0 0 0;font-size:14px;opacity:.95;">Création de votre Espace Particulier CNAPS</p>
+            <td style="background:linear-gradient(135deg,#1d4ed8,#2563eb);padding:20px 24px;color:#fff;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="{{ logo_url }}" alt="Logo Intégrale Academy" width="64" style="display:block;width:64px;height:64px;border-radius:12px;background:#fff;padding:6px;">
+                  </td>
+                  <td style="padding-left:14px;vertical-align:middle;">
+                    <h2 style="margin:0;font-size:25px;line-height:1.2;">Intégrale Academy</h2>
+                    <p style="margin:6px 0 0 0;font-size:14px;opacity:.95;">Création de votre Espace Particulier CNAPS</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
-            <td style="padding:24px;line-height:1.65;font-size:15px;">
-              <p>Bonjour {{ prenom }},</p>
+            <td style="padding:28px 26px 14px 26px;line-height:1.65;font-size:16px;">
+              <p style="margin-top:0;">Bonjour <strong>{{ prenom }}</strong>,</p>
               <p>
-                Je me permets de revenir vers vous concernant la formation
-                <strong>{{ formation_name }}</strong>.
+                Nous revenons vers vous concernant la formation <strong>{{ formation_name }}</strong>.
               </p>
               <p>
-                Nous venons de créer votre <strong>Espace Particulier CNAPS</strong>. Afin que nous puissions déposer votre dossier
-                auprès du CNAPS (Ministère de l'intérieur) dans les plus brefs délais,
-                nous vous demandons de bien vouloir <strong>valider votre compte</strong> dès que possible via le lien reçu par mail
-                de la part du CNAPS DRACAR ULTIMATE.
+                Votre <strong>Espace Particulier CNAPS</strong> est bien créé. Afin que nous puissions déposer votre dossier
+                auprès du CNAPS (Ministère de l'intérieur) dans les meilleurs délais,
+                merci de <strong>valider votre compte</strong> via le lien reçu par mail de la part du CNAPS DRACAR ULTIMATE.
               </p>
-              <p style="padding:12px 14px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;">
-                ⚠️ Attention : le lien expire dans un délai de <strong>12 heures</strong>.
+
+              <p style="padding:12px 14px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;margin:16px 0;">
+                ⚠️ Attention : le lien CNAPS expire dans un délai de <strong>12 heures</strong>.
               </p>
+
+              <p style="margin:18px 0 8px 0;">
+                Dès que vous aurez validé votre Espace Particulier CNAPS, veuillez cliquer sur ce bouton :
+              </p>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:10px 0 14px 0;">
+                <tr>
+                  <td>
+                    <a href="{{ validation_url }}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold;font-size:15px;box-shadow:0 4px 14px rgba(22,163,74,.25);">J'ai validé mon compte Espace Particulier</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size:14px;color:#4b5563;margin-top:0;">
+                Si besoin, vous pouvez accéder directement à la page de connexion CNAPS ici :
+                <a href="{{ dracar_auth_url }}" style="color:#1d4ed8;">Connexion Espace Usagers CNAPS</a>.
+              </p>
+
               <p>Nous vous remercions par avance.</p>
-              <p style="margin-top:24px;">
-                Clément VAILLANT<br>
-                <span style="color:#6b7280;">Directeur Intégrale Academy</span>
+              <p style="margin-top:24px;margin-bottom:4px;">
+                Clément VAILLANT
               </p>
+              <p style="margin:0;color:#6b7280;">Directeur Intégrale Academy</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 26px 22px 26px;font-size:12px;color:#94a3b8;">
+              Cet email est envoyé automatiquement par Intégrale Academy dans le cadre du suivi administratif CNAPS.
             </td>
           </tr>
         </table>

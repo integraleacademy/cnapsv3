@@ -54,6 +54,7 @@ BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
+PUBLIC_APP_BASE_URL = os.getenv("PUBLIC_APP_BASE_URL", "https://cnapsv3.onrender.com").rstrip("/")
 
 FORMATION_SESSIONS = {
     "APS": [
@@ -108,6 +109,7 @@ def init_db():
                 formation TEXT,
                 session_date TEXT,
                 espace_cnaps TEXT NOT NULL DEFAULT 'A créer',
+                espace_cnaps_validation_token TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL
@@ -117,6 +119,17 @@ def init_db():
         columns = {row[1] for row in conn.execute("PRAGMA table_info(public_requests)").fetchall()}
         if "espace_cnaps" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps TEXT NOT NULL DEFAULT 'A créer'")
+        if "espace_cnaps_validation_token" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_validation_token TEXT")
+
+        missing_tokens = conn.execute(
+            "SELECT id FROM public_requests WHERE espace_cnaps_validation_token IS NULL OR espace_cnaps_validation_token = ''"
+        ).fetchall()
+        for row in missing_tokens:
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps_validation_token = ? WHERE id = ?",
+                (str(uuid.uuid4()), row[0]),
+            )
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS request_documents (
@@ -192,6 +205,10 @@ def _get_statuts_dates(conn, dossier_id):
 def _table_has_column(conn, table_name, column_name):
     columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
     return column_name in columns
+
+
+def _new_validation_token():
+    return str(uuid.uuid4())
 
 
 init_db()
@@ -812,22 +829,22 @@ def public_form():
     non_francais = 1 if request.form.get("non_francais") == "on" else 0
 
     if not all([nom, prenom, email, email_confirm, date_naissance]):
-        flash("Tous les champs personnels sont obligatoires.", "error")
+        flash("Tous les champs personnels sont obligatoires.", "public_error")
         return redirect(url_for("public_form"))
 
     if email != email_confirm:
-        flash("L'email et sa confirmation doivent être identiques.", "error")
+        flash("L'email et sa confirmation doivent être identiques.", "public_error")
         return redirect(url_for("public_form"))
 
     try:
         datetime.strptime(date_naissance, "%d/%m/%Y")
     except ValueError:
-        flash("La date de naissance doit être au format DD/MM/YYYY.", "error")
+        flash("La date de naissance doit être au format DD/MM/YYYY.", "public_error")
         return redirect(url_for("public_form"))
 
     for item in CHECKLIST_LABELS:
         if request.form.get(item) != "on":
-            flash("Vous devez cocher toutes les cases de conformité.", "error")
+            flash("Vous devez cocher toutes les cases de conformité.", "public_error")
             return redirect(url_for("public_form"))
 
     required = _required_doc_types(heberge, non_francais)
@@ -836,15 +853,15 @@ def public_form():
         files = request.files.getlist(doc_type)
         cleaned = [f for f in files if f and f.filename]
         if not cleaned:
-            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "error")
+            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "public_error")
             return redirect(url_for("public_form"))
         for f in cleaned:
             filename = (f.filename or "").lower()
             if not filename.endswith(".pdf"):
-                flash(f"Le document {f.filename} doit être au format PDF.", "error")
+                flash(f"Le document {f.filename} doit être au format PDF.", "public_error")
                 return redirect(url_for("public_form"))
             if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
-                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
                 return redirect(url_for("public_form"))
         uploaded[doc_type] = cleaned
 
@@ -861,10 +878,10 @@ def public_form():
 
         cur = conn.execute(
             """
-            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, espace_cnaps_validation_token)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais),
+            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, _new_validation_token()),
         )
         request_id = cur.lastrowid
 
@@ -879,7 +896,11 @@ def public_form():
                     (request_id, doc_type, original, stored, rel_path),
                 )
 
-    email_html = render_template("emails/confirmation_depot.html", prenom=prenom)
+    email_html = render_template(
+        "emails/confirmation_depot.html",
+        prenom=prenom,
+        logo_url=url_for("static", filename="logo.png", _external=True),
+    )
     _send_email_html(
         email,
         "Confirmation de dépôt dossier CNAPS",
@@ -959,6 +980,14 @@ def update_espace_cnaps(request_id):
             return jsonify({"ok": False, "error": "Demande introuvable"}), 404
 
         old_status = req["espace_cnaps"] or "A créer"
+        token = (req["espace_cnaps_validation_token"] or "").strip() if "espace_cnaps_validation_token" in req.keys() else ""
+        if not token:
+            token = _new_validation_token()
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps_validation_token = ? WHERE id = ?",
+                (token, request_id),
+            )
+
         conn.execute(
             "UPDATE public_requests SET espace_cnaps = ?, updated_at = datetime('now','localtime') WHERE id = ?",
             (nouvel_etat, request_id),
@@ -970,6 +999,9 @@ def update_espace_cnaps(request_id):
             "emails/espace_cnaps_cree.html",
             prenom=req["prenom"],
             formation_name=formation_name,
+            logo_url=url_for("static", filename="logo.png", _external=True),
+            validation_url=f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}",
+            dracar_auth_url=DRACAR_AUTH_URL,
         )
         _send_email_html(req["email"], "Votre Espace Particulier CNAPS est créé", html)
 
@@ -981,6 +1013,35 @@ def update_espace_cnaps(request_id):
         _send_sms(req["telephone"], sms)
 
     return ("", 204)
+
+
+@app.route("/espace-cnaps/validation/<token>", methods=["GET"])
+def validate_espace_cnaps(token):
+    clean_token = (token or "").strip()
+    if not clean_token:
+        abort(404)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id, prenom, espace_cnaps FROM public_requests WHERE espace_cnaps_validation_token = ?",
+            (clean_token,),
+        ).fetchone()
+        if not req:
+            abort(404)
+
+        already_validated = (req["espace_cnaps"] or "") == "Validé"
+        if not already_validated:
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps = 'Validé', updated_at = datetime('now','localtime') WHERE id = ?",
+                (req["id"],),
+            )
+
+    return render_template(
+        "public_espace_cnaps_valide.html",
+        prenom=req["prenom"],
+        already_validated=already_validated,
+    )
 
 
 @app.route("/a-traiter/<int:request_id>/assign", methods=["POST"])
@@ -1139,7 +1200,14 @@ def notify_non_conformities(request_id):
             return redirect(url_for("request_documents", request_id=request_id))
 
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
-        html = render_template("emails/non_conformite.html", prenom=req["prenom"], docs=docs, labels=DOC_LABELS, replace_url=replace_url)
+        html = render_template(
+            "emails/non_conformite.html",
+            prenom=req["prenom"],
+            docs=docs,
+            labels=DOC_LABELS,
+            replace_url=replace_url,
+            logo_url=url_for("static", filename="logo.png", _external=True),
+        )
 
         try:
             _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
@@ -1178,22 +1246,29 @@ def replace_documents(request_id):
         if not req:
             abort(404)
 
+        invalids = conn.execute(
+            """
+            SELECT * FROM request_documents
+            WHERE request_id = ?
+              AND is_active = 1
+              AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
+            """,
+            (request_id,),
+        ).fetchall()
+
         if request.method == "POST":
-            invalids = conn.execute(
-                """
-                SELECT * FROM request_documents
-                WHERE request_id = ?
-                  AND is_active = 1
-                  AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
-                """,
-                (request_id,),
-            ).fetchall()
+            if not invalids:
+                return render_template("replace_documents_already_sent.html")
+
             replaced = 0
             for doc in invalids:
                 incoming = request.files.get(f"replace_{doc['id']}")
                 if incoming and incoming.filename:
+                    if not incoming.filename.lower().endswith(".pdf"):
+                        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
                     if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
                         return redirect(url_for("replace_documents", request_id=request_id))
                     conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
                     original, stored, rel_path = _secure_store(incoming, str(request_id))
@@ -1209,15 +1284,8 @@ def replace_documents(request_id):
                 conn.execute("UPDATE public_requests SET updated_at = datetime('now','localtime') WHERE id = ?", (request_id,))
             return render_template("replace_documents_success.html", replaced=replaced)
 
-        invalids = conn.execute(
-            """
-            SELECT * FROM request_documents
-            WHERE request_id = ?
-              AND is_active = 1
-              AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
-            """,
-            (request_id,),
-        ).fetchall()
+    if not invalids:
+        return render_template("replace_documents_already_sent.html")
 
     return render_template("replace_documents.html", req=req, invalids=invalids, labels=DOC_LABELS)
 

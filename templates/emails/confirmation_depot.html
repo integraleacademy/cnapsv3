@@ -1,1 +1,66 @@
-<!doctype html><html><body style="font-family:Arial;background:#f7fafc;padding:20px"><div style="max-width:620px;margin:auto;background:#fff;border-radius:12px;padding:22px"><h2 style="color:#1d4ed8">Confirmation de dépôt dossier CNAPS</h2><p>Bonjour {{ prenom }},</p><p>Nous vous informons que nous avons bien reçu vos documents. Nous allons contrôler que l'ensemble des documents sont conformes avant de procéder à la demande d'autorisation préalable auprès du CNAPS (Ministère de l'intérieur).</p><p>Nous reviendrons prochainement vers vous pour vous confirmer que nous avons bien déposé la demande auprès du CNAPS ou si un document est non conforme.</p><p>Nous vous souhaitons une bonne journée,<br>La Team Intégrale Academy</p></div></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Confirmation de dépôt dossier CNAPS</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2ff;font-family:Arial,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2ff;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 28px rgba(15,23,42,.12);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#1d4ed8,#2563eb);padding:20px 24px;color:#fff;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    {% if logo_url %}
+                    <img src="{{ logo_url }}" alt="Logo Intégrale Academy" width="52" height="52" style="display:block;border-radius:10px;background:#fff;padding:4px;object-fit:contain;">
+                    {% endif %}
+                  </td>
+                  <td style="vertical-align:middle;padding-left:14px;">
+                    <h1 style="margin:0;font-size:22px;line-height:1.2;">Confirmation de dépôt dossier CNAPS</h1>
+                    <p style="margin:6px 0 0 0;font-size:14px;opacity:.92;">Intégrale Academy • Suivi de votre demande</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px 24px 18px;line-height:1.68;font-size:16px;">
+              <p style="margin:0 0 14px;">Bonjour <strong>{{ prenom }}</strong>,</p>
+              <p style="margin:0 0 14px;">
+                Nous vous confirmons la bonne réception de vos documents.
+                Notre équipe va vérifier que l'ensemble des pièces est conforme avant de lancer
+                la demande d'autorisation préalable auprès du CNAPS (Ministère de l'Intérieur).
+              </p>
+              <p style="margin:0 0 14px;">
+                Nous reviendrons vers vous très prochainement pour vous confirmer le dépôt du dossier
+                auprès du CNAPS, ou vous indiquer les éventuels documents à corriger.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:10px 0 0;">
+                <tr>
+                  <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;color:#1e3a8a;font-size:14px;">
+                    📌 <strong>Bon à savoir :</strong> aucun document supplémentaire n'est nécessaire pour le moment.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <p style="margin:0;color:#374151;line-height:1.6;">Nous vous souhaitons une excellente journée,<br><strong>La Team Intégrale Academy</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:14px 24px;color:#6b7280;font-size:12px;line-height:1.5;">
+              Cet email a été envoyé automatiquement suite au dépôt de votre dossier.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Validation Espace CNAPS</title>
+  <style>
+    body { margin:0; font-family:Arial,sans-serif; background:#eff6ff; color:#1f2937; }
+    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { width:min(640px,100%); background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(30,64,175,.18); overflow:hidden; }
+    .head { background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; padding:20px 24px; }
+    .head h1 { margin:0; font-size:24px; }
+    .content { padding:28px 24px; line-height:1.6; font-size:17px; }
+    .pill { display:inline-block; padding:8px 14px; border-radius:999px; background:#dcfce7; color:#166534; font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <h1>Intégrale Academy</h1>
+      </div>
+      <div class="content">
+        <p>Bonjour {{ prenom }},</p>
+        {% if already_validated %}
+          <p>Votre validation avait déjà bien été enregistrée.</p>
+        {% else %}
+          <p>Merci, votre action a bien été prise en compte.</p>
+        {% endif %}
+        <p>Le statut de votre Espace Particulier CNAPS est maintenant : <span class="pill">Validé</span>.</p>
+        <p>Nous pouvons poursuivre le traitement de votre dossier.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
