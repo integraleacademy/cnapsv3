@@ -4,6 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Espace CNAPS créé</title>
+  <style>
+    @keyframes ctaPulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 14px rgba(22, 163, 74, .25);
+      }
+      50% {
+        transform: scale(1.03);
+        box-shadow: 0 8px 20px rgba(22, 163, 74, .35);
+      }
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #16a34a;
+      color: #fff;
+      text-decoration: none;
+      padding: 13px 20px;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 15px;
+      box-shadow: 0 4px 14px rgba(22, 163, 74, .25);
+      animation: ctaPulse 1.8s ease-in-out infinite;
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;background:#eef2ff;font-family:Arial,sans-serif;color:#1f2937;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2ff;padding:28px 12px;">
@@ -45,18 +70,13 @@
                 Dès que vous aurez validé votre Espace Particulier CNAPS, veuillez cliquer sur ce bouton :
               </p>
 
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:10px 0 14px 0;">
+              <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:10px auto 14px auto;">
                 <tr>
                   <td>
-                    <a href="{{ validation_url }}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:bold;font-size:15px;box-shadow:0 4px 14px rgba(22,163,74,.25);">J'ai validé mon compte Espace Particulier</a>
+                    <a href="{{ validation_url }}" class="cta-button">J'ai validé mon compte Espace Particulier</a>
                   </td>
                 </tr>
               </table>
-
-              <p style="font-size:14px;color:#4b5563;margin-top:0;">
-                Si besoin, vous pouvez accéder directement à la page de connexion CNAPS ici :
-                <a href="{{ dracar_auth_url }}" style="color:#1d4ed8;">Connexion Espace Usagers CNAPS</a>.
-              </p>
 
               <p>Nous vous remercions par avance.</p>
               <p style="margin-top:24px;margin-bottom:4px;">
