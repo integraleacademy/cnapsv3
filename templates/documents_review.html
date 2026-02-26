@@ -29,15 +29,17 @@
       font-family: Inter, Arial, sans-serif;
       background: linear-gradient(180deg, #eceff4 0%, var(--bg) 120%);
       color: var(--text);
-      padding: 24px;
+      padding: 16px;
+      font-size: 15px;
+      line-height: 1.4;
     }
 
     .wrap {
-      max-width: 980px;
+      max-width: 900px;
       margin: 0 auto;
       background: var(--card);
       border-radius: 18px;
-      padding: 28px;
+      padding: 20px;
       box-shadow: var(--shadow);
       border: 1px solid var(--border);
     }
@@ -52,7 +54,7 @@
     }
 
     .logo {
-      width: 210px;
+      width: 170px;
       max-width: 100%;
       height: auto;
       display: block;
@@ -67,7 +69,7 @@
       border: 1px solid #bfdbfe;
       background: #eff6ff;
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       font-weight: 600;
       transition: .2s ease;
     }
@@ -80,19 +82,19 @@
 
     h1 {
       margin: 8px 0 4px;
-      font-size: 34px;
+      font-size: clamp(28px, 3.8vw, 40px);
       letter-spacing: -0.4px;
     }
 
     .subtitle {
       margin: 0 0 24px;
       color: var(--muted);
-      font-size: 16px;
+      font-size: 15px;
     }
 
     .group-title {
       margin: 24px 0 10px;
-      font-size: 24px;
+      font-size: 18px;
       letter-spacing: -0.2px;
     }
 
@@ -133,12 +135,12 @@
       align-items: center;
       justify-content: center;
       border-radius: 999px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       font-weight: 700;
       border: 2px solid transparent;
       cursor: pointer;
       transition: .2s ease;
-      min-width: 150px;
+      min-width: 130px;
     }
 
     .status-pill.pending {
@@ -184,7 +186,7 @@
       width: 100%;
       border: 1px solid #cbd5e1;
       border-radius: 10px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       margin-top: 10px;
       font: inherit;
       color: inherit;
@@ -210,8 +212,35 @@
       font: inherit;
       font-weight: 700;
       cursor: pointer;
-      padding: 12px 16px;
+      padding: 10px 14px;
       transition: .2s ease;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 10px;
+      }
+
+      .wrap {
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .topbar {
+        margin-bottom: 2px;
+      }
+
+      .logo {
+        width: 130px;
+      }
+
+      .group-title {
+        font-size: 16px;
+      }
+
+      .status-pill {
+        min-width: 100%;
+      }
     }
 
     .btn-primary {
