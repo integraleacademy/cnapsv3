@@ -150,7 +150,7 @@
       <h1>Formulaire public CNAPS</h1>
       <p class="subtitle">Déposez votre dossier en quelques minutes, avec vérification simplifiée.</p>
     </header>
-    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% with messages = get_flashed_messages(with_categories=true, category_filter=['public_error']) %}
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
     <form method="post" enctype="multipart/form-data">
