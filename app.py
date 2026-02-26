@@ -135,6 +135,21 @@ def init_db():
             )
         """)
 
+        if not _table_has_column(conn, "request_documents", "review_status"):
+            conn.execute("ALTER TABLE request_documents ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'")
+
+        conn.execute(
+            """
+            UPDATE request_documents
+            SET review_status = CASE
+                WHEN review_status IS NOT NULL AND review_status != '' THEN review_status
+                WHEN is_conforme = 1 THEN 'conforme'
+                WHEN is_conforme = 0 THEN 'non_conforme'
+                ELSE 'pending'
+            END
+            """
+        )
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS request_non_conformity_notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1040,19 +1055,26 @@ def review_documents(request_id):
             status = request.form.get(f"status_{doc_id}")
             reason = (request.form.get(f"reason_{doc_id}") or "").strip()
             is_conforme = None
+            review_status = "pending"
             reviewed_at = None
             if status == "conforme":
                 is_conforme = 1
+                review_status = "conforme"
                 reason = ""
                 reviewed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             elif status == "non_conforme":
                 is_conforme = 0
+                review_status = "non_conforme"
+                reviewed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            elif status == "notified_expected":
+                is_conforme = 0
+                review_status = "notified_expected"
                 reviewed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             else:
                 reason = ""
             conn.execute(
-                "UPDATE request_documents SET is_conforme = ?, non_conformite_reason = ?, reviewed_at = ? WHERE id = ?",
-                (is_conforme, reason, reviewed_at, doc_id),
+                "UPDATE request_documents SET is_conforme = ?, review_status = ?, non_conformite_reason = ?, reviewed_at = ? WHERE id = ?",
+                (is_conforme, review_status, reason, reviewed_at, doc_id),
             )
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -1092,6 +1114,11 @@ def notify_non_conformities(request_id):
             return redirect(url_for("request_documents", request_id=request_id))
 
         conn.execute("INSERT INTO request_non_conformity_notifications (request_id) VALUES (?)", (request_id,))
+        doc_ids = [doc["id"] for doc in docs]
+        conn.executemany(
+            "UPDATE request_documents SET review_status = 'notified_expected' WHERE id = ?",
+            [(doc_id,) for doc_id in doc_ids],
+        )
 
     return redirect(url_for("request_documents", request_id=request_id))
 
@@ -1106,7 +1133,12 @@ def replace_documents(request_id):
 
         if request.method == "POST":
             invalids = conn.execute(
-                "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1 AND is_conforme = 0",
+                """
+                SELECT * FROM request_documents
+                WHERE request_id = ?
+                  AND is_active = 1
+                  AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
+                """,
                 (request_id,),
             ).fetchall()
             replaced = 0
@@ -1131,7 +1163,12 @@ def replace_documents(request_id):
             return render_template("replace_documents_success.html", replaced=replaced)
 
         invalids = conn.execute(
-            "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1 AND is_conforme = 0",
+            """
+            SELECT * FROM request_documents
+            WHERE request_id = ?
+              AND is_active = 1
+              AND (review_status = 'notified_expected' OR (is_conforme = 0 AND review_status = 'non_conforme'))
+            """,
             (request_id,),
         ).fetchall()
 
