@@ -939,3 +939,7 @@ def download_full_bundle(request_id):
 
     memory_file.seek(0)
     return send_file(memory_file, as_attachment=True, download_name=f"dossier_cnaps_{safe_nom}.zip", mimetype="application/zip")
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
