@@ -656,6 +656,10 @@ def public_form():
             flash(f"Document manquant : {DOC_LABELS[doc_type]}", "error")
             return redirect(url_for("public_form"))
         for f in cleaned:
+            filename = (f.filename or "").lower()
+            if not filename.endswith(".pdf"):
+                flash(f"Le document {f.filename} doit être au format PDF.", "error")
+                return redirect(url_for("public_form"))
             if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
                 flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
                 return redirect(url_for("public_form"))
