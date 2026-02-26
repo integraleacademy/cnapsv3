@@ -28,9 +28,27 @@
   {% endfor %}
   </tbody></table>
 </div>
-<dialog id="assignDialog"><form id="assignForm" method="post"><h3>Affecter une formation</h3><label>Formation</label><select name="formation" required><option value="APS">APS</option><option value="A3P">A3P</option></select><label>Date</label><input type="text" name="session_date" required placeholder="Ex: Du 5 janvier au 6 février 2026"><div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div></form></dialog>
+<dialog id="assignDialog"><form id="assignForm" method="post"><h3>Affecter une formation</h3><label>Formation</label><select id="assignFormation" name="formation" required onchange="updateAssignDates()"><option value="">-- Type de formation --</option><option value="APS">APS</option><option value="A3P">A3P</option></select><label>Date</label><select id="assignSessionDate" name="session_date" required><option value="">-- Choisir une date --</option></select><div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div></form></dialog>
 <script>
-const assignDialog=document.getElementById('assignDialog'); const assignForm=document.getElementById('assignForm');
-function openAssign(id){assignForm.action=`/a-traiter/${id}/assign`; assignDialog.showModal();}
+const sessionsByFormation = {{ formation_sessions | tojson }};
+const assignDialog=document.getElementById('assignDialog');
+const assignForm=document.getElementById('assignForm');
+const assignFormation=document.getElementById('assignFormation');
+const assignSessionDate=document.getElementById('assignSessionDate');
+
+function updateAssignDates(){
+  assignSessionDate.innerHTML='<option value="">-- Choisir une date --</option>';
+  const dates=sessionsByFormation[assignFormation.value]||[];
+  dates.forEach(function(dateLabel){
+    assignSessionDate.add(new Option(dateLabel, dateLabel));
+  });
+}
+
+function openAssign(id){
+  assignForm.action=`/a-traiter/${id}/assign`;
+  assignFormation.value='';
+  updateAssignDates();
+  assignDialog.showModal();
+}
 </script>
 </body></html>
