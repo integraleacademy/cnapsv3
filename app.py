@@ -1200,7 +1200,14 @@ def notify_non_conformities(request_id):
             return redirect(url_for("request_documents", request_id=request_id))
 
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
-        html = render_template("emails/non_conformite.html", prenom=req["prenom"], docs=docs, labels=DOC_LABELS, replace_url=replace_url)
+        html = render_template(
+            "emails/non_conformite.html",
+            prenom=req["prenom"],
+            docs=docs,
+            labels=DOC_LABELS,
+            replace_url=replace_url,
+            logo_url=url_for("static", filename="logo.png", _external=True),
+        )
 
         try:
             _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
