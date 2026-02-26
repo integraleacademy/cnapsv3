@@ -14,6 +14,8 @@ import zipfile
 from io import BytesIO
 from email.message import EmailMessage
 import smtplib
+from urllib import request as urllib_request
+import json
 
 
 
@@ -44,6 +46,9 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@integrale-academy.fr")
+SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
+DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
+DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
 
 FORMATION_SESSIONS = {
     "APS": [
@@ -97,11 +102,16 @@ def init_db():
                 non_francais INTEGER NOT NULL DEFAULT 0,
                 formation TEXT,
                 session_date TEXT,
+                espace_cnaps TEXT NOT NULL DEFAULT 'A créer',
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL
             )
         """)
+
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(public_requests)").fetchall()}
+        if "espace_cnaps" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps TEXT NOT NULL DEFAULT 'A créer'")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS request_documents (
@@ -325,15 +335,69 @@ def update_statut_cnaps(id):
         data = request.get_json(silent=True) or {}
         nouveau_statut = data.get("statut_cnaps", "")
         with sqlite3.connect(DB_NAME) as conn:
+            conn.row_factory = sqlite3.Row
+            dossier = conn.execute(
+                """
+                SELECT d.*, pr.email AS request_email, pr.date_naissance
+                FROM dossiers d
+                LEFT JOIN public_requests pr ON pr.dossier_id = d.id
+                WHERE d.id = ?
+                ORDER BY pr.id DESC
+                LIMIT 1
+                """,
+                (id,),
+            ).fetchone()
+            old_statut = dossier["statut_cnaps"] if dossier else ""
             conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
             _record_statut_cnaps_history(conn, id, nouveau_statut)
+
+        if dossier and old_statut != "TRANSMIS" and nouveau_statut == "TRANSMIS":
+            email = (dossier["request_email"] or "").strip().lower()
+            if email:
+                formation_name = _formation_full_name(dossier["formation"])
+                html = render_template(
+                    "emails/statut_transmis.html",
+                    prenom=dossier["prenom"],
+                    formation_name=formation_name,
+                    login=email,
+                    password=_dracar_password(dossier["nom"], dossier["date_naissance"]),
+                    dracar_app_url=DRACAR_APP_URL,
+                )
+                _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
         return ("", 204)   # aucun rechargement de page
 
     # --- Mode ancien formulaire (fallback) ---
     nouveau_statut = request.form.get("statut_cnaps", "")
     with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        dossier = conn.execute(
+            """
+            SELECT d.*, pr.email AS request_email, pr.date_naissance
+            FROM dossiers d
+            LEFT JOIN public_requests pr ON pr.dossier_id = d.id
+            WHERE d.id = ?
+            ORDER BY pr.id DESC
+            LIMIT 1
+            """,
+            (id,),
+        ).fetchone()
+        old_statut = dossier["statut_cnaps"] if dossier else ""
         conn.execute("UPDATE dossiers SET statut_cnaps = ? WHERE id = ?", (nouveau_statut, id))
         _record_statut_cnaps_history(conn, id, nouveau_statut)
+
+    if dossier and old_statut != "TRANSMIS" and nouveau_statut == "TRANSMIS":
+        email = (dossier["request_email"] or "").strip().lower()
+        if email:
+            formation_name = _formation_full_name(dossier["formation"])
+            html = render_template(
+                "emails/statut_transmis.html",
+                prenom=dossier["prenom"],
+                formation_name=formation_name,
+                login=email,
+                password=_dracar_password(dossier["nom"], dossier["date_naissance"]),
+                dracar_app_url=DRACAR_APP_URL,
+            )
+            _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
     return redirect("/")
 
 
@@ -580,6 +644,40 @@ def _send_email_html(to_email: str, subject: str, html: str):
         server.send_message(msg)
 
 
+def _send_sms(to_phone: str, message: str):
+    if not to_phone:
+        return
+    if not SMS_WEBHOOK_URL:
+        print(f"[SMS MOCK] to={to_phone}")
+        print(message)
+        return
+
+    payload = json.dumps({"to": to_phone, "message": message}).encode("utf-8")
+    req = urllib_request.Request(
+        SMS_WEBHOOK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib_request.urlopen(req, timeout=10):
+        pass
+
+
+def _formation_full_name(formation: str):
+    return {
+        "APS": "Agent de sécurité privée",
+        "A3P": "Agent de protection physique des personnes",
+    }.get(formation or "", formation or "votre formation")
+
+
+def _dracar_password(lastname: str, birth_date: str):
+    nom = (lastname or "").strip()
+    if nom:
+        nom = nom[:1].upper() + nom[1:].lower()
+    digits = "".join(ch for ch in (birth_date or "") if ch.isdigit())
+    return f"{nom}{digits}@"
+
+
 def _required_doc_types(heberge: int, non_francais: int):
     required = ["identity", "proof_address"]
     if heberge:
@@ -717,6 +815,7 @@ def a_traiter():
                 pr.*,
                 d.statut_cnaps,
                 d.commentaire,
+                d.telephone,
                 COALESCE(doc_stats.total_docs, 0) AS total_docs,
                 COALESCE(doc_stats.conformes, 0) AS conformes,
                 COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
@@ -738,7 +837,63 @@ def a_traiter():
             """
         ).fetchall()
 
-    return render_template("a_traiter.html", requests=rows, formation_sessions=FORMATION_SESSIONS)
+    return render_template(
+        "a_traiter.html",
+        requests=rows,
+        formation_sessions=FORMATION_SESSIONS,
+        dracar_auth_url=DRACAR_AUTH_URL,
+    )
+
+
+@app.route("/a-traiter/<int:request_id>/espace-cnaps", methods=["POST"])
+@login_required
+def update_espace_cnaps(request_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        nouvel_etat = (data.get("espace_cnaps") or "").strip()
+    else:
+        nouvel_etat = (request.form.get("espace_cnaps") or "").strip()
+
+    if nouvel_etat not in {"A créer", "Créé", "Validé"}:
+        return jsonify({"ok": False, "error": "Valeur invalide"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            """
+            SELECT pr.*, d.telephone
+            FROM public_requests pr
+            LEFT JOIN dossiers d ON d.id = pr.dossier_id
+            WHERE pr.id = ?
+            """,
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        old_status = req["espace_cnaps"] or "A créer"
+        conn.execute(
+            "UPDATE public_requests SET espace_cnaps = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (nouvel_etat, request_id),
+        )
+
+    if old_status != "Créé" and nouvel_etat == "Créé":
+        formation_name = _formation_full_name(req["formation"])
+        html = render_template(
+            "emails/espace_cnaps_cree.html",
+            prenom=req["prenom"],
+            formation_name=formation_name,
+        )
+        _send_email_html(req["email"], "Votre Espace Particulier CNAPS est créé", html)
+
+        sms = (
+            f"Bonjour {req['prenom']}, votre Espace Particulier CNAPS pour la formation {formation_name} "
+            "vient d'être créé. Merci de valider votre compte via le lien reçu du CNAPS. "
+            "Le lien expire sous 12h."
+        )
+        _send_sms(req["telephone"], sms)
+
+    return ("", 204)
 
 
 @app.route("/a-traiter/<int:request_id>/assign", methods=["POST"])

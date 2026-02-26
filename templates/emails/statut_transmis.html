@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Dossier CNAPS transmis</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);">
+          <tr>
+            <td style="background:#0f766e;padding:20px 24px;color:#fff;">
+              <h2 style="margin:0;font-size:22px;">Suivi de votre dossier CNAPS</h2>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;line-height:1.65;font-size:15px;">
+              <p>Bonjour {{ prenom }},</p>
+              <p>
+                Je me permets de revenir vers vous concernant la formation
+                <strong>{{ formation_name }}</strong>.
+              </p>
+              <p>Vous pouvez suivre l'état d'avancement de votre dossier depuis votre Espace Particulier CNAPS.</p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:12px 0 20px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+                <tr>
+                  <td style="padding:14px;">
+                    <p style="margin:0 0 8px 0;"><strong>Login :</strong> {{ login }}</p>
+                    <p style="margin:0;"><strong>Mot de passe :</strong> {{ password }}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin-bottom:18px;">Connectez-vous à votre Espace Particulier :</p>
+              <p>
+                <a href="{{ dracar_app_url }}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold;">Accéder à l'Espace CNAPS</a>
+              </p>
+
+              <p style="margin-top:24px;">Nous vous souhaitons une agréable journée.</p>
+              <p style="margin-top:24px;">
+                Clément VAILLANT<br>
+                <span style="color:#6b7280;">Directeur Intégrale Academy</span>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -68,7 +68,7 @@
 
     table {
       width: 100%;
-      min-width: 1300px;
+      min-width: 1650px;
       border-collapse: collapse;
     }
 
@@ -146,6 +146,10 @@
     .statut-docsmanquants { background-color: red; color: white; font-weight: bold; }
     .statut-default { background-color: lightgray; color: black; font-weight: bold; }
 
+    .espace-a-creer { background-color: #dc2626; color: white; font-weight: bold; }
+    .espace-cree { background-color: #f59e0b; color: white; font-weight: bold; }
+    .espace-valide { background-color: #16a34a; color: white; font-weight: bold; }
+
     .cnaps-select {
       border: none;
       font-weight: bold;
@@ -175,6 +179,8 @@
         <th>Générer attestation</th>
         <th>Gérer les documents</th>
         <th>Télécharger les documents</th>
+        <th>DRACAR</th>
+        <th>Espace CNAPS</th>
         <th>Statut CNAPS</th>
         <th>Commentaire / Supprimer</th>
       </tr>
@@ -212,6 +218,21 @@
           {% else %}
             <button class="btn grey" disabled>Télécharger les documents</button>
           {% endif %}
+        </td>
+        <td>
+          <div style="font-size:13px;line-height:1.5;">
+            <div><strong>Login :</strong> {{ r.email }}</div>
+            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' }}</span></div>
+            <a href="{{ dracar_auth_url }}" target="_blank" rel="noopener">Lien Espace DRACAR</a>
+          </div>
+        </td>
+        <td>
+          {% set espace = r.espace_cnaps or 'A créer' %}
+          <select name="espace_cnaps" data-request-id="{{ r.id }}" class="cnaps-select {% if espace == 'A créer' %}espace-a-creer{% elif espace == 'Créé' %}espace-cree{% elif espace == 'Validé' %}espace-valide{% else %}espace-a-creer{% endif %}">
+            <option value="A créer" {% if espace == 'A créer' %}selected{% endif %}>A créer</option>
+            <option value="Créé" {% if espace == 'Créé' %}selected{% endif %}>Créé</option>
+            <option value="Validé" {% if espace == 'Validé' %}selected{% endif %}>Validé</option>
+          </select>
         </td>
         <td>
           <form action="/statut_cnaps/{{ r.dossier_id }}" method="post">
@@ -296,6 +317,18 @@ function applyCnapsClass(select){
   select.classList.add(map[value] || 'statut-default');
 }
 
+function applyEspaceClass(select){
+  const value = select.value;
+  const map = {
+    "A créer": "espace-a-creer",
+    "Créé": "espace-cree",
+    "Validé": "espace-valide"
+  };
+  select.classList.remove('espace-a-creer','espace-cree','espace-valide');
+  select.classList.add('cnaps-select');
+  select.classList.add(map[value] || 'espace-a-creer');
+}
+
 document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
   applyCnapsClass(select);
   select.addEventListener('change', () => {
@@ -307,6 +340,20 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ statut_cnaps: select.value })
     }).then(() => applyCnapsClass(select));
+  });
+});
+
+document.querySelectorAll("select[name='espace_cnaps']").forEach(select => {
+  applyEspaceClass(select);
+  select.addEventListener('change', () => {
+    const rid = select.dataset.requestId;
+    if (!rid) return;
+
+    fetch(`/a-traiter/${rid}/espace-cnaps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ espace_cnaps: select.value })
+    }).then(() => applyEspaceClass(select));
   });
 });
 
