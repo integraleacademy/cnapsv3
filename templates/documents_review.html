@@ -1,17 +1,268 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Gérer les documents</title><style>body{font-family:Arial;background:#f3f4f6}.wrap{max-width:960px;margin:20px auto;background:#fff;padding:20px;border-radius:12px}.doc{border:1px solid #e5e7eb;padding:12px;border-radius:10px;margin:10px 0}</style></head><body><div class="wrap"><a href="/a-traiter">← Retour</a><h2>Documents de {{ req.prenom }} {{ req.nom }}</h2>
-<form method="post" action="/a-traiter/{{ req.id }}/documents/review">
-{% for doc_type, docs in grouped.items() %}
-  <h3>{{ doc_labels.get(doc_type, doc_type) }}</h3>
-  {% for d in docs %}
-    <div class="doc">
-      <a href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank">{{ d.original_name }}</a><br>
-      <label><input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.is_conforme==1 %}checked{% endif %}> Conforme</label>
-      <label><input type="radio" name="status_{{ d.id }}" value="non_conforme" {% if d.is_conforme==0 %}checked{% endif %}> Non conforme</label>
-      <input name="reason_{{ d.id }}" value="{{ d.non_conformite_reason or '' }}" placeholder="Pourquoi non conforme ?" style="width:100%;padding:8px;margin-top:6px">
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gérer les documents</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --success: #16a34a;
+      --success-bg: #f0fdf4;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --border: #e2e8f0;
+      --shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, #eceff4 0%, var(--bg) 120%);
+      color: var(--text);
+      padding: 24px;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      background: var(--card);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .logo {
+      width: 210px;
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      transition: .2s ease;
+    }
+
+    .back-btn:hover {
+      background: #dbeafe;
+      color: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    h1 {
+      margin: 8px 0 4px;
+      font-size: 34px;
+      letter-spacing: -0.4px;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .group-title {
+      margin: 24px 0 10px;
+      font-size: 24px;
+      letter-spacing: -0.2px;
+    }
+
+    .doc {
+      border: 1px solid var(--border);
+      background: #fcfdff;
+      border-radius: 14px;
+      padding: 14px;
+      margin: 10px 0;
+    }
+
+    .doc-link {
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      word-break: break-word;
+    }
+
+    .doc-link:hover {
+      text-decoration: underline;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 700;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: .2s ease;
+      min-width: 150px;
+    }
+
+    .status-pill.conforme {
+      color: #15803d;
+      background: var(--success-bg);
+      border-color: #86efac;
+    }
+
+    .status-pill.non-conforme {
+      color: #b91c1c;
+      background: var(--danger-bg);
+      border-color: #fca5a5;
+    }
+
+    input[type="radio"]:checked + .status-pill.conforme {
+      color: white;
+      background: var(--success);
+      border-color: var(--success);
+      box-shadow: 0 8px 18px rgba(22, 163, 74, 0.25);
+    }
+
+    input[type="radio"]:checked + .status-pill.non-conforme {
+      color: white;
+      background: var(--danger);
+      border-color: var(--danger);
+      box-shadow: 0 8px 18px rgba(220, 38, 38, 0.25);
+    }
+
+    .reason {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+    }
+
+    .reason:focus {
+      outline: none;
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .2);
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 12px 16px;
+      transition: .2s ease;
+    }
+
+    .btn-primary {
+      background: #1e40af;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #1e3a8a;
+      transform: translateY(-1px);
+    }
+
+    .btn-warning {
+      background: #ea580c;
+      color: #fff;
+    }
+
+    .btn-warning:hover {
+      background: #c2410c;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back-btn" href="/a-traiter">← Retour à la liste</a>
+      <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
     </div>
-  {% endfor %}
-{% endfor %}
-<button type="submit">Enregistrer la conformité</button>
-</form>
-<form method="post" action="/a-traiter/{{ req.id }}/notify" style="margin-top:12px"><button type="submit">Notifier les non conformités</button></form>
-</div></body></html>
+
+    <h1>Documents de {{ req.prenom }} {{ req.nom }}</h1>
+    <p class="subtitle">Sélectionnez un statut clair pour chaque document puis enregistrez ou notifiez les non-conformités.</p>
+
+    <form method="post" action="/a-traiter/{{ req.id }}/documents/review">
+      {% for doc_type, docs in grouped.items() %}
+        <h2 class="group-title">{{ doc_labels.get(doc_type, doc_type) }}</h2>
+        {% for d in docs %}
+          <div class="doc">
+            <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
+
+            <div class="status-row">
+              <label>
+                <input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.is_conforme==1 %}checked{% endif %}>
+                <span class="status-pill conforme">✅ Conforme</span>
+              </label>
+              <label>
+                <input type="radio" name="status_{{ d.id }}" value="non_conforme" {% if d.is_conforme==0 %}checked{% endif %}>
+                <span class="status-pill non-conforme">❌ Non conforme</span>
+              </label>
+            </div>
+
+            <input class="reason" name="reason_{{ d.id }}" value="{{ d.non_conformite_reason or '' }}" placeholder="Précisez la raison si le document est non conforme.">
+          </div>
+        {% endfor %}
+      {% endfor %}
+
+      <div class="actions">
+        <button class="btn-primary" type="submit">Enregistrer la conformité</button>
+      </div>
+    </form>
+
+    <form method="post" action="/a-traiter/{{ req.id }}/notify" class="actions">
+      <button class="btn-warning" type="submit">Notifier les non-conformités</button>
+    </form>
+  </div>
+</body>
+</html>
