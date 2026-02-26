@@ -236,6 +236,31 @@
       this.value = formatBirthDate(this.value);
     });
 
+    const selectedFilesByInput = new Map();
+
+    function fileKey(file) {
+      return `${file.name}__${file.size}__${file.lastModified}`;
+    }
+
+    function mergeFiles(existingFiles, newFiles) {
+      const merged = [...existingFiles];
+      const seen = new Set(existingFiles.map(fileKey));
+      newFiles.forEach(file => {
+        const key = fileKey(file);
+        if (!seen.has(key)) {
+          merged.push(file);
+          seen.add(key);
+        }
+      });
+      return merged;
+    }
+
+    function assignFilesToInput(input, files) {
+      const dataTransfer = new DataTransfer();
+      files.forEach(file => dataTransfer.items.add(file));
+      input.files = dataTransfer.files;
+    }
+
     function updateUploadStatus(input) {
       const status = document.querySelector(`[data-upload-status="${input.name}"]`);
       if (!status) return;
@@ -250,6 +275,15 @@
 
     document.querySelectorAll('input[type="file"]').forEach(function(input) {
       input.addEventListener('change', function() {
+        let files = Array.from(input.files || []);
+
+        if (input.multiple) {
+          const existingFiles = selectedFilesByInput.get(input.name) || [];
+          files = mergeFiles(existingFiles, files);
+          selectedFilesByInput.set(input.name, files);
+          assignFilesToInput(input, files);
+        }
+
         updateUploadStatus(input);
       });
     });
