@@ -589,6 +589,12 @@ def _required_doc_types(heberge: int, non_francais: int):
     return required
 
 
+def _sanitize_zip_component(value: str) -> str:
+    """Évite les séparateurs de dossiers dans les noms de fichiers du ZIP."""
+    cleaned = (value or "document").replace("/", "-").replace("\\", "-")
+    return "_".join(cleaned.split())
+
+
 def _secure_store(file_storage, subfolder):
     original = file_storage.filename or "document"
     ext = os.path.splitext(original)[1]
@@ -920,9 +926,9 @@ def download_full_bundle(request_id):
     with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, doc in enumerate(docs, start=1):
             source = os.path.join(UPLOAD_DIR, doc["storage_path"])
-            label = DOC_LABELS.get(doc["doc_type"], doc["doc_type"])
+            label = _sanitize_zip_component(DOC_LABELS.get(doc["doc_type"], doc["doc_type"]))
             ext = os.path.splitext(doc["original_name"])[1]
-            arcname = f"{i:02d}_{label}_{safe_nom}{ext}".replace(" ", "_")
+            arcname = _sanitize_zip_component(f"{i:02d}_{label}_{safe_nom}{ext}")
             if os.path.exists(source):
                 zf.write(source, arcname)
 
