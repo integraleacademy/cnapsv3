@@ -1116,11 +1116,20 @@ def review_documents(request_id):
 def notify_non_conformities(request_id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
+        req = conn.execute(
+            f"""
+            SELECT pr.*, {telephone_expr} AS telephone
+            FROM public_requests pr
+            LEFT JOIN dossiers d ON d.id = pr.dossier_id
+            WHERE pr.id = ?
+            """,
+            (request_id,),
+        ).fetchone()
         docs = conn.execute(
             """
             SELECT * FROM request_documents
-            WHERE request_id = ? AND is_active = 1 AND is_conforme = 0
+            WHERE request_id = ? AND is_active = 1 AND review_status = 'non_conforme'
             ORDER BY doc_type, id DESC
             """,
             (request_id,),
@@ -1131,15 +1140,25 @@ def notify_non_conformities(request_id):
 
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
         html = render_template("emails/non_conformite.html", prenom=req["prenom"], docs=docs, labels=DOC_LABELS, replace_url=replace_url)
+
         try:
             _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
-        except RuntimeError as exc:
+        except RuntimeError:
             app.logger.exception("Échec envoi email non-conformités request_id=%s", request_id)
             flash(
                 "Impossible d'envoyer l'email de non-conformité. Vérifie la configuration email (Brevo/SMTP) et réessaie.",
                 "error",
             )
             return redirect(url_for("request_documents", request_id=request_id))
+
+        try:
+            sms = (
+                f"Bonjour {req['prenom']}, certains documents de votre dossier CNAPS sont non conformes. "
+                f"Merci de les remplacer ici : {replace_url}"
+            )
+            _send_sms(req["telephone"], sms)
+        except Exception:
+            app.logger.exception("Échec envoi SMS non-conformités request_id=%s", request_id)
 
         conn.execute("INSERT INTO request_non_conformity_notifications (request_id) VALUES (?)", (request_id,))
         doc_ids = [doc["id"] for doc in docs]

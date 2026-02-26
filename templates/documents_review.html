@@ -143,22 +143,10 @@
       min-width: 130px;
     }
 
-    .status-pill.pending {
-      color: #92400e;
-      background: #fffbeb;
-      border-color: #fcd34d;
-    }
-
-    .status-pill.conforme {
-      color: #15803d;
-      background: var(--success-bg);
-      border-color: #86efac;
-    }
-
-    .status-pill.non-conforme {
-      color: #b91c1c;
-      background: var(--danger-bg);
-      border-color: #fca5a5;
+    .status-pill {
+      color: #475569;
+      background: #f1f5f9;
+      border-color: #cbd5e1;
     }
 
     input[type="radio"]:checked + .status-pill.pending {
@@ -180,6 +168,13 @@
       background: var(--danger);
       border-color: var(--danger);
       box-shadow: 0 8px 18px rgba(220, 38, 38, 0.25);
+    }
+
+    input[type="radio"]:checked + .status-pill.notified {
+      color: #fff;
+      background: #d97706;
+      border-color: #d97706;
+      box-shadow: 0 8px 18px rgba(217, 119, 6, 0.25);
     }
 
     .reason {
@@ -312,7 +307,7 @@
               </label>
               <label>
                 <input type="radio" name="status_{{ d.id }}" value="notified_expected" {% if d.review_status == 'notified_expected' %}checked{% endif %}>
-                <span class="status-pill pending">📩 Notifié, nouveau document attendu</span>
+                <span class="status-pill notified">📩 Notifié, nouveau document attendu</span>
               </label>
             </div>
 
