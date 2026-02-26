@@ -726,12 +726,16 @@ def _send_sms(to_phone: str, message: str):
     if not to_phone:
         return
 
+    normalized_phone = _normalize_phone_number(to_phone)
+    if not normalized_phone:
+        raise RuntimeError(f"Numéro de téléphone invalide: {to_phone!r}")
+
     if not SMS_WEBHOOK_URL:
         if BREVO_API_KEY and BREVO_SMS_SENDER:
             payload = json.dumps(
                 {
                     "sender": BREVO_SMS_SENDER,
-                    "recipient": to_phone,
+                    "recipient": normalized_phone,
                     "content": message,
                     "type": "transactional",
                 }
@@ -750,11 +754,11 @@ def _send_sms(to_phone: str, message: str):
                 pass
             return
 
-        print(f"[SMS MOCK] to={to_phone}")
+        print(f"[SMS MOCK] to={normalized_phone}")
         print(message)
         return
 
-    payload = json.dumps({"to": to_phone, "message": message}).encode("utf-8")
+    payload = json.dumps({"to": normalized_phone, "message": message}).encode("utf-8")
     req = urllib_request.Request(
         SMS_WEBHOOK_URL,
         data=payload,
@@ -763,6 +767,29 @@ def _send_sms(to_phone: str, message: str):
     )
     with urllib_request.urlopen(req, timeout=10):
         pass
+
+
+def _normalize_phone_number(phone: str):
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if not digits:
+        return ""
+
+    if digits.startswith("00"):
+        return f"+{digits[2:]}"
+
+    if digits.startswith("33"):
+        return f"+{digits}"
+
+    if digits.startswith("0") and len(digits) == 10:
+        return f"+33{digits[1:]}"
+
+    if phone.startswith("+") and len(digits) >= 9:
+        return f"+{digits}"
+
+    if len(digits) >= 9:
+        return f"+{digits}"
+
+    return ""
 
 
 def _formation_full_name(formation: str):
@@ -1010,7 +1037,10 @@ def update_espace_cnaps(request_id):
             "vient d'être créé. Merci de valider votre compte via le lien reçu du CNAPS. "
             "Le lien expire sous 12h."
         )
-        _send_sms(req["telephone"], sms)
+        try:
+            _send_sms(req["telephone"], sms)
+        except Exception:
+            app.logger.exception("Échec envoi SMS espace CNAPS request_id=%s", request_id)
 
     return ("", 204)
 
