@@ -410,22 +410,22 @@ document.querySelectorAll('.dracar-link').forEach(link => {
 
     window.open(dracarUrl.toString(), '_blank', 'noopener');
 
-    const credentialsLabel = `Login : ${login}\nMot de passe : ${password}`;
-    const canUseClipboard = navigator.clipboard && window.isSecureContext && (login || password);
+    const passwordToCopy = password;
+    const canUseClipboard = navigator.clipboard && window.isSecureContext && Boolean(passwordToCopy);
 
     if (canUseClipboard) {
       navigator.clipboard
-        .writeText(credentialsLabel)
+        .writeText(passwordToCopy)
         .then(() => {
-          window.alert('Identifiants DRACAR copiés. Collez le mot de passe dans le champ avec Ctrl+V.');
+          window.alert('Mot de passe DRACAR copié. Collez-le dans le champ avec Ctrl+V.');
         })
         .catch(() => {
-          window.prompt('Copiez les identifiants DRACAR :', credentialsLabel);
+          window.prompt('Copiez uniquement le mot de passe DRACAR :', passwordToCopy);
         });
       return;
     }
 
-    window.prompt('Copiez les identifiants DRACAR :', credentialsLabel);
+    window.prompt('Copiez uniquement le mot de passe DRACAR :', passwordToCopy);
   });
 });
 </script>
