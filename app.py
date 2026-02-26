@@ -11,6 +11,7 @@ from werkzeug.security import check_password_hash
 import unicodedata
 import uuid
 import zipfile
+from zoneinfo import ZoneInfo
 from io import BytesIO
 from email.message import EmailMessage
 import smtplib
@@ -78,6 +79,63 @@ FORMATION_SESSIONS = {
 DB_NAME = "/mnt/data/cnaps.db"
 UPLOAD_DIR = "/mnt/data/uploads"
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
+FRANCE_TZ = ZoneInfo("Europe/Paris")
+
+
+def _now_france():
+    return datetime.now(FRANCE_TZ)
+
+
+def _to_db_datetime(dt: datetime):
+    return dt.astimezone(FRANCE_TZ).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_db_datetime(value):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                parsed = None
+        if parsed is None:
+            return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=FRANCE_TZ)
+    return parsed.astimezone(FRANCE_TZ)
+
+
+def _cnaps_expiration_label(expiration_dt):
+    return expiration_dt.strftime("%d/%m/%Y à %Hh%M")
+
+
+def _compute_cnaps_timing(req):
+    created_at = _parse_db_datetime(req.get("espace_cnaps_created_at"))
+    if created_at is None and (req.get("espace_cnaps") or "") == "Créé":
+        created_at = _parse_db_datetime(req.get("updated_at"))
+
+    if created_at is None:
+        return {
+            "cnaps_expiration_dt": None,
+            "cnaps_expiration_label": None,
+            "cnaps_is_expired": False,
+            "cnaps_remaining": None,
+        }
+
+    expiration_dt = created_at + timedelta(hours=12)
+    remaining = expiration_dt - _now_france()
+    return {
+        "cnaps_expiration_dt": expiration_dt,
+        "cnaps_expiration_label": _cnaps_expiration_label(expiration_dt),
+        "cnaps_is_expired": remaining.total_seconds() <= 0,
+        "cnaps_remaining": remaining,
+    }
 
 
 def init_db():
@@ -121,6 +179,12 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps TEXT NOT NULL DEFAULT 'A créer'")
         if "espace_cnaps_validation_token" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_validation_token TEXT")
+        if "espace_cnaps_created_at" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_created_at TEXT")
+        if "cnaps_reminder_4h_sent_at" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_4h_sent_at TEXT")
+        if "cnaps_reminder_2h_sent_at" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_2h_sent_at TEXT")
 
         missing_tokens = conn.execute(
             "SELECT id FROM public_requests WHERE espace_cnaps_validation_token IS NULL OR espace_cnaps_validation_token = ''"
@@ -816,6 +880,62 @@ def _required_doc_types(heberge: int, non_francais: int):
     return required
 
 
+def _send_cnaps_reminders(conn, requests_rows):
+    for req in requests_rows:
+        if (req.get("espace_cnaps") or "") != "Créé":
+            continue
+
+        timing = _compute_cnaps_timing(req)
+        remaining = timing["cnaps_remaining"]
+        if remaining is None or timing["cnaps_is_expired"]:
+            continue
+
+        remaining_seconds = remaining.total_seconds()
+        first_due = remaining_seconds <= 4 * 3600 and not req.get("cnaps_reminder_4h_sent_at")
+        second_due = remaining_seconds <= 2 * 3600 and not req.get("cnaps_reminder_2h_sent_at")
+        if not first_due and not second_due:
+            continue
+
+        formation_name = _formation_full_name(req.get("formation"))
+        expiration_label = timing["cnaps_expiration_label"]
+        recipient_email = (req.get("email") or "").strip()
+        now_db = _to_db_datetime(_now_france())
+
+        if first_due:
+            if recipient_email:
+                html = render_template(
+                    "emails/espace_cnaps_rappel_4h.html",
+                    formation_name=formation_name,
+                    logo_url=url_for("static", filename="logo.png", _external=True),
+                )
+                _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
+            _send_sms(
+                req.get("telephone"),
+                f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
+            )
+            conn.execute(
+                "UPDATE public_requests SET cnaps_reminder_4h_sent_at = ? WHERE id = ?",
+                (now_db, req["id"]),
+            )
+
+        if second_due:
+            if recipient_email:
+                html = render_template(
+                    "emails/espace_cnaps_rappel_2h.html",
+                    formation_name=formation_name,
+                    logo_url=url_for("static", filename="logo.png", _external=True),
+                )
+                _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
+            _send_sms(
+                req.get("telephone"),
+                f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
+            )
+            conn.execute(
+                "UPDATE public_requests SET cnaps_reminder_2h_sent_at = ? WHERE id = ?",
+                (now_db, req["id"]),
+            )
+
+
 def _sanitize_zip_component(value: str) -> str:
     """Évite les séparateurs de dossiers dans les noms de fichiers du ZIP."""
     cleaned = (value or "document").replace("/", "-").replace("\\", "-")
@@ -971,9 +1091,17 @@ def a_traiter():
             """
         ).fetchall()
 
+        rows_dict = [dict(row) for row in rows]
+        _send_cnaps_reminders(conn, rows_dict)
+        for row in rows_dict:
+            timing = _compute_cnaps_timing(row)
+            row.update(timing)
+            if row.get("espace_cnaps") == "Validé":
+                row["cnaps_is_expired"] = False
+
     return render_template(
         "a_traiter.html",
-        requests=rows,
+        requests=rows_dict,
         formation_sessions=FORMATION_SESSIONS,
         dracar_auth_url=DRACAR_AUTH_URL,
     )
@@ -1015,9 +1143,23 @@ def update_espace_cnaps(request_id):
                 (token, request_id),
             )
 
+        update_fields = ["espace_cnaps = ?", "updated_at = datetime('now','localtime')"]
+        params = [nouvel_etat]
+
+        if old_status != "Créé" and nouvel_etat == "Créé":
+            update_fields.append("espace_cnaps_created_at = ?")
+            update_fields.append("cnaps_reminder_4h_sent_at = NULL")
+            update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+            params.append(_to_db_datetime(_now_france()))
+        elif nouvel_etat == "A créer":
+            update_fields.append("espace_cnaps_created_at = NULL")
+            update_fields.append("cnaps_reminder_4h_sent_at = NULL")
+            update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+
+        params.append(request_id)
         conn.execute(
-            "UPDATE public_requests SET espace_cnaps = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-            (nouvel_etat, request_id),
+            f"UPDATE public_requests SET {', '.join(update_fields)} WHERE id = ?",
+            tuple(params),
         )
 
     if old_status != "Créé" and nouvel_etat == "Créé":
