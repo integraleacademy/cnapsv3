@@ -1,54 +1,329 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>A traiter</title>
-<style>body{font-family:Arial;background:#f4f6fb;margin:0} .wrap{max-width:1200px;margin:24px auto;background:#fff;padding:20px;border-radius:14px} table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left} .btn{padding:8px 10px;border-radius:8px;border:none;cursor:pointer;background:#2d6cdf;color:white} .btn.grey{background:#9ca3af;cursor:not-allowed} .orange{background:#f59e0b;animation:pulse 1.2s infinite} @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.6)}100%{box-shadow:0 0 0 14px rgba(245,158,11,0)}}</style>
-</head><body><div class="wrap">
-  <h1>Onglet A traiter</h1><a href="/">← Retour</a>
-  <table><thead><tr><th>Nom</th><th>Prénom</th><th>Affecter une formation</th><th>Formation</th><th>Dates de formation</th><th>Générer attestation</th><th>Gérer les documents</th><th>Télécharger les documents</th><th>Statut CNAPS</th><th>Ajouter un commentaire / Supprimer</th></tr></thead><tbody>
-  {% for r in requests %}
-    <tr>
-      <td>{{ r.nom }}</td><td>{{ r.prenom }}</td>
-      <td>
-        {% if r.formation and r.session_date %}
-          <button class="btn grey" disabled>Affectée</button>
-        {% else %}
-          <button class="btn" onclick="openAssign({{ r.id }})">Affecter une formation</button>
-        {% endif %}
-      </td>
-      <td>{{ r.formation or '-' }}</td>
-      <td>{{ r.session_date or '-' }}</td>
-      <td>{% if r.dossier_id and r.formation %}<a class="btn" href="/attestation/{{ r.dossier_id }}">Générer</a>{% else %}-{% endif %}</td>
-      <td><a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a></td>
-      <td><a class="btn" href="/a-traiter/{{ r.id }}/download">Télécharger les documents</a></td>
-      <td>{{ r.statut_cnaps or 'A TRAITER' }}</td>
-      <td>
-        <form action="/commentaire/{{ r.dossier_id }}" method="post"><input name="commentaire" placeholder="Commentaire" style="padding:8px;border:1px solid #ddd;border-radius:8px"><button class="btn" type="submit">Ajouter</button></form>
-        <form action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')"><button class="btn" style="background:#dc2626;margin-top:6px">Supprimer</button></form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody></table>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>A traiter</title>
+  <style>
+    :root {
+      --primary: #2d6cdf;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --muted: #9ca3af;
+      --text: #111827;
+      --border: #e5e7eb;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      color: var(--text);
+    }
+
+    .wrap {
+      width: calc(100% - 32px);
+      margin: 16px;
+      background: var(--card);
+      padding: 18px;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      overflow-x: auto;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand img {
+      height: 52px;
+      width: auto;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    h1 { margin: 0; }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover { opacity: 0.85; }
+
+    table {
+      width: 100%;
+      min-width: 1300px;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .btn {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 14px;
+    }
+
+    .btn:hover { opacity: 0.92; }
+
+    .btn.grey,
+    .btn[disabled] {
+      background: var(--muted);
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn.success {
+      background: var(--success);
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      margin-top: 6px;
+    }
+
+    .orange {
+      background: var(--warning);
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); }
+      100% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
+    }
+
+    .commentaire-input,
+    .cnaps-select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .save-hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+
+    .statut-transmis { background-color: gray; color: white; font-weight: bold; }
+    .statut-enregistre { background-color: orange; color: white; font-weight: bold; }
+    .statut-instruction { background-color: gold; color: black; font-weight: bold; }
+    .statut-accepte { background-color: green; color: white; font-weight: bold; }
+    .statut-refuse { background-color: black; color: white; font-weight: bold; }
+    .statut-docsmanquants { background-color: red; color: white; font-weight: bold; }
+    .statut-default { background-color: lightgray; color: black; font-weight: bold; }
+
+    .cnaps-select {
+      border: none;
+      font-weight: bold;
+      min-height: 40px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
+      <h1>Onglet A traiter</h1>
+    </div>
+    <a href="/">← Retour</a>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th>
+        <th>Prénom</th>
+        <th>Affecter une formation</th>
+        <th>Formation</th>
+        <th>Dates de formation</th>
+        <th>Générer attestation</th>
+        <th>Gérer les documents</th>
+        <th>Télécharger les documents</th>
+        <th>Statut CNAPS</th>
+        <th>Commentaire / Supprimer</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in requests %}
+      {% set all_docs_conformes = (r.total_docs > 0 and r.total_docs == r.conformes) %}
+      <tr>
+        <td>{{ r.nom }}</td>
+        <td>{{ r.prenom }}</td>
+        <td>
+          {% if r.formation and r.session_date %}
+            <button class="btn grey" disabled>Affectée</button>
+          {% else %}
+            <button class="btn" onclick="openAssign({{ r.id }})">Affecter une formation</button>
+          {% endif %}
+        </td>
+        <td>{{ r.formation or '-' }}</td>
+        <td>{{ r.session_date or '-' }}</td>
+        <td>
+          {% if r.dossier_id and r.formation %}
+            <a class="btn" href="/attestation/{{ r.dossier_id }}">Générer</a>
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td>
+          <a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a>
+        </td>
+        <td>
+          {% if all_docs_conformes %}
+            <a class="btn success" href="/a-traiter/{{ r.id }}/download">✅ Télécharger les documents</a>
+          {% else %}
+            <button class="btn grey" disabled>Télécharger les documents</button>
+          {% endif %}
+        </td>
+        <td>
+          <form action="/statut_cnaps/{{ r.dossier_id }}" method="post">
+            {% set cnaps = r.statut_cnaps or '' %}
+            <select name="statut_cnaps" data-id="{{ r.dossier_id }}" class="cnaps-select {% if cnaps == 'TRANSMIS' %}statut-transmis{% elif cnaps == 'ENREGISTRÉ' %}statut-enregistre{% elif cnaps == 'INSTRUCTION' %}statut-instruction{% elif cnaps == 'ACCEPTÉ' %}statut-accepte{% elif cnaps == 'REFUSÉ' %}statut-refuse{% elif cnaps == 'DOCS COMPLEMENTAIRES' %}statut-docsmanquants{% else %}statut-default{% endif %}">
+              <option value="">--</option>
+              <option value="TRANSMIS" {% if cnaps == 'TRANSMIS' %}selected{% endif %}>TRANSMIS</option>
+              <option value="ENREGISTRÉ" {% if cnaps == 'ENREGISTRÉ' %}selected{% endif %}>ENREGISTRÉ</option>
+              <option value="INSTRUCTION" {% if cnaps == 'INSTRUCTION' %}selected{% endif %}>INSTRUCTION</option>
+              <option value="ACCEPTÉ" {% if cnaps == 'ACCEPTÉ' %}selected{% endif %}>ACCEPTÉ</option>
+              <option value="REFUSÉ" {% if cnaps == 'REFUSÉ' %}selected{% endif %}>REFUSÉ</option>
+              <option value="DOCS COMPLEMENTAIRES" {% if cnaps == 'DOCS COMPLEMENTAIRES' %}selected{% endif %}>DOCS COMPLEMENTAIRES</option>
+            </select>
+          </form>
+        </td>
+        <td>
+          <form>
+            <textarea class="commentaire-input" data-id="{{ r.dossier_id }}" placeholder="Commentaire">{{ r.commentaire or '' }}</textarea>
+            <div class="save-hint">Sauvegarde automatique</div>
+          </form>
+          <form action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')">
+            <button class="btn danger" type="submit">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
-<dialog id="assignDialog"><form id="assignForm" method="post"><h3>Affecter une formation</h3><label>Formation</label><select id="assignFormation" name="formation" required onchange="updateAssignDates()"><option value="">-- Type de formation --</option><option value="APS">APS</option><option value="A3P">A3P</option></select><label>Date</label><select id="assignSessionDate" name="session_date" required><option value="">-- Choisir une date --</option></select><div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div></form></dialog>
+
+<dialog id="assignDialog">
+  <form id="assignForm" method="post">
+    <h3>Affecter une formation</h3>
+    <label>Formation</label>
+    <select id="assignFormation" name="formation" required onchange="updateAssignDates()">
+      <option value="">-- Type de formation --</option>
+      <option value="APS">APS</option>
+      <option value="A3P">A3P</option>
+    </select>
+    <label>Date</label>
+    <select id="assignSessionDate" name="session_date" required>
+      <option value="">-- Choisir une date --</option>
+    </select>
+    <div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div>
+  </form>
+</dialog>
+
 <script>
 const sessionsByFormation = {{ formation_sessions | tojson }};
-const assignDialog=document.getElementById('assignDialog');
-const assignForm=document.getElementById('assignForm');
-const assignFormation=document.getElementById('assignFormation');
-const assignSessionDate=document.getElementById('assignSessionDate');
+const assignDialog = document.getElementById('assignDialog');
+const assignForm = document.getElementById('assignForm');
+const assignFormation = document.getElementById('assignFormation');
+const assignSessionDate = document.getElementById('assignSessionDate');
 
 function updateAssignDates(){
-  assignSessionDate.innerHTML='<option value="">-- Choisir une date --</option>';
-  const dates=sessionsByFormation[assignFormation.value]||[];
+  assignSessionDate.innerHTML = '<option value="">-- Choisir une date --</option>';
+  const dates = sessionsByFormation[assignFormation.value] || [];
   dates.forEach(function(dateLabel){
     assignSessionDate.add(new Option(dateLabel, dateLabel));
   });
 }
 
 function openAssign(id){
-  assignForm.action=`/a-traiter/${id}/assign`;
-  assignFormation.value='';
+  assignForm.action = `/a-traiter/${id}/assign`;
+  assignFormation.value = '';
   updateAssignDates();
   assignDialog.showModal();
 }
+
+function applyCnapsClass(select){
+  const value = select.value;
+  const map = {
+    "TRANSMIS": "statut-transmis",
+    "ENREGISTRÉ": "statut-enregistre",
+    "INSTRUCTION": "statut-instruction",
+    "ACCEPTÉ": "statut-accepte",
+    "REFUSÉ": "statut-refuse",
+    "DOCS COMPLEMENTAIRES": "statut-docsmanquants"
+  };
+  select.classList.remove('statut-transmis','statut-enregistre','statut-instruction','statut-accepte','statut-refuse','statut-docsmanquants','statut-default');
+  select.classList.add('cnaps-select');
+  select.classList.add(map[value] || 'statut-default');
+}
+
+document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
+  applyCnapsClass(select);
+  select.addEventListener('change', () => {
+    const cid = select.dataset.id;
+    if (!cid) return;
+
+    fetch(`/statut_cnaps/${cid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statut_cnaps: select.value })
+    }).then(() => applyCnapsClass(select));
+  });
+});
+
+document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
+  let timeoutId;
+  const save = () => {
+    const cid = input.dataset.id;
+    if (!cid) return;
+    fetch(`/commentaire/${cid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commentaire: input.value })
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(save, 350);
+  });
+
+  input.addEventListener('blur', save);
+});
 </script>
-</body></html>
+</body>
+</html>
