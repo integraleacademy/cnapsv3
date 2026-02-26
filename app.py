@@ -513,8 +513,8 @@ def attestation_pdf(id):
     stagiaire = get_stagiaire_by_id(id)
     if not stagiaire:
         return "Stagiaire introuvable", 404
-    formation = stagiaire["formation"]
-    if formation not in ["APS", "A3P"]:
+    formation = _formation_code(stagiaire["formation"])
+    if not formation:
         return "Type de formation non pris en charge", 400
     template_name = f"attestation_{formation.lower()}.html"
     html = render_template(template_name, stagiaire=stagiaire)
@@ -861,6 +861,19 @@ def _formation_full_name(formation: str):
         "APS": "Agent de sécurité privée",
         "A3P": "Agent de protection physique des personnes",
     }.get(formation or "", formation or "votre formation")
+
+
+def _formation_code(formation: str):
+    normalized = (formation or "").strip().upper()
+    if normalized in {"APS", "A3P"}:
+        return normalized
+
+    if "A3P" in normalized:
+        return "A3P"
+    if "APS" in normalized:
+        return "APS"
+
+    return ""
 
 
 def _dracar_password(lastname: str, birth_date: str):
@@ -1534,8 +1547,9 @@ def download_full_bundle(request_id):
             if os.path.exists(source):
                 zf.write(source, arcname)
 
-        if dossier and dossier["formation"] in ["APS", "A3P"]:
-            html = render_template(f"attestation_{dossier['formation'].lower()}.html", stagiaire=dossier)
+        formation = _formation_code(dossier["formation"] if dossier else req["formation"])
+        if formation:
+            html = render_template(f"attestation_{formation.lower()}.html", stagiaire=dossier or req)
             pdf = HTML(string=html, base_url=os.getcwd()).write_pdf()
             zf.writestr(f"attestation_preinscription_{safe_nom}.pdf", pdf)
 
