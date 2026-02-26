@@ -153,16 +153,18 @@
     {% with messages = get_flashed_messages(with_categories=true, category_filter=['public_error']) %}
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
+    {% set fd = form_data if form_data is defined else {} %}
     <form method="post" enctype="multipart/form-data">
       <div class="section">
         <div class="section-badge">👤 Étape 1</div>
         <h2>Informations personnelles</h2>
         <div class="grid">
-          <div><label>Nom</label><input name="nom" required></div>
-          <div><label>Prénom</label><input name="prenom" required></div>
-          <div><label>Mail</label><input type="email" name="email" required></div>
-          <div><label>Confirmation mail</label><input type="email" name="email_confirm" required></div>
-          <div><label>Date de naissance (DD/MM/YYYY)</label><input id="date_naissance" name="date_naissance" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" required></div>
+          <div><label>Nom</label><input name="nom" value="{{ fd.get('nom', '') }}" required></div>
+          <div><label>Prénom</label><input name="prenom" value="{{ fd.get('prenom', '') }}" required></div>
+          <div><label>Mail</label><input type="email" name="email" value="{{ fd.get('email', '') }}" required></div>
+          <div><label>Confirmation mail</label><input type="email" name="email_confirm" value="{{ fd.get('email_confirm', '') }}" required></div>
+          <div><label>Téléphone portable</label><input type="tel" name="telephone" value="{{ fd.get('telephone', '') }}" required></div>
+          <div><label>Date de naissance (DD/MM/YYYY)</label><input id="date_naissance" name="date_naissance" value="{{ fd.get('date_naissance', '') }}" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" required></div>
         </div>
       </div>
       <div class="section">
@@ -179,7 +181,7 @@
       <div class="section">
         <div class="section-badge">🧩 Étape 3</div>
         <h2>Documents complémentaires</h2>
-        <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto"><label for="heberge">Si vous êtes hébergé(e)</label></div>
+        <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto" {% if fd.get('heberge') == 'on' %}checked{% endif %}><label for="heberge">Cochez la case si vous êtes hébergé(e)</label></div>
         <div id="heberge_bloc" class="hidden">
           <label>HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
           <input type="file" name="host_identity" accept="application/pdf,.pdf" multiple>
@@ -189,7 +191,7 @@
           <input type="file" name="hosting_certificate" accept="application/pdf,.pdf">
           <div class="upload-status" data-upload-status="hosting_certificate"></div>
         </div>
-        <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto"><label for="non_francais">Si vous n'avez pas la nationalité française</label></div>
+        <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto" {% if fd.get('non_francais') == 'on' %}checked{% endif %}><label for="non_francais">Cochez la case si vous n'avez pas la nationalité française</label></div>
         <div id="non_francais_bloc" class="hidden">
           <label>Casier judiciaire du pays de naissance (moins de 3 mois, traduit)</label>
           <input type="file" name="criminal_record" accept="application/pdf,.pdf">
@@ -210,7 +212,7 @@
           "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
           "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée."
         ] %}
-        <label><input type="checkbox" name="{{ item }}" style="width:auto" required> {{ item }}</label>
+        <label><input type="checkbox" name="{{ item }}" style="width:auto" required {% if fd.get(item) == 'on' %}checked{% endif %}> {{ item }}</label>
         {% endfor %}
       </div>
       <div class="section">
@@ -276,11 +278,20 @@
     document.querySelectorAll('input[type="file"]').forEach(function(input) {
       input.addEventListener('change', function() {
         let files = Array.from(input.files || []);
+        const tooLargeFiles = files.filter(file => file.size > 5 * 1024 * 1024);
+
+        if (tooLargeFiles.length) {
+          const names = tooLargeFiles.map(file => file.name).join(', ');
+          alert(`Le document ${names} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.`);
+          files = files.filter(file => file.size <= 5 * 1024 * 1024);
+        }
 
         if (input.multiple) {
           const existingFiles = selectedFilesByInput.get(input.name) || [];
-          files = mergeFiles(existingFiles, files);
+          files = mergeFiles(existingFiles, files).filter(file => file.size <= 5 * 1024 * 1024);
           selectedFilesByInput.set(input.name, files);
+          assignFilesToInput(input, files);
+        } else {
           assignFilesToInput(input, files);
         }
 
