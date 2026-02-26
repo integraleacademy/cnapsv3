@@ -54,6 +54,7 @@ BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
+PUBLIC_APP_BASE_URL = os.getenv("PUBLIC_APP_BASE_URL", "https://cnapsv3.onrender.com").rstrip("/")
 
 FORMATION_SESSIONS = {
     "APS": [
@@ -108,6 +109,7 @@ def init_db():
                 formation TEXT,
                 session_date TEXT,
                 espace_cnaps TEXT NOT NULL DEFAULT 'A créer',
+                espace_cnaps_validation_token TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE SET NULL
@@ -117,6 +119,17 @@ def init_db():
         columns = {row[1] for row in conn.execute("PRAGMA table_info(public_requests)").fetchall()}
         if "espace_cnaps" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps TEXT NOT NULL DEFAULT 'A créer'")
+        if "espace_cnaps_validation_token" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_validation_token TEXT")
+
+        missing_tokens = conn.execute(
+            "SELECT id FROM public_requests WHERE espace_cnaps_validation_token IS NULL OR espace_cnaps_validation_token = ''"
+        ).fetchall()
+        for row in missing_tokens:
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps_validation_token = ? WHERE id = ?",
+                (str(uuid.uuid4()), row[0]),
+            )
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS request_documents (
@@ -192,6 +205,10 @@ def _get_statuts_dates(conn, dossier_id):
 def _table_has_column(conn, table_name, column_name):
     columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
     return column_name in columns
+
+
+def _new_validation_token():
+    return str(uuid.uuid4())
 
 
 init_db()
@@ -861,10 +878,10 @@ def public_form():
 
         cur = conn.execute(
             """
-            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, espace_cnaps_validation_token)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais),
+            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, _new_validation_token()),
         )
         request_id = cur.lastrowid
 
@@ -963,6 +980,14 @@ def update_espace_cnaps(request_id):
             return jsonify({"ok": False, "error": "Demande introuvable"}), 404
 
         old_status = req["espace_cnaps"] or "A créer"
+        token = (req["espace_cnaps_validation_token"] or "").strip() if "espace_cnaps_validation_token" in req.keys() else ""
+        if not token:
+            token = _new_validation_token()
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps_validation_token = ? WHERE id = ?",
+                (token, request_id),
+            )
+
         conn.execute(
             "UPDATE public_requests SET espace_cnaps = ?, updated_at = datetime('now','localtime') WHERE id = ?",
             (nouvel_etat, request_id),
@@ -974,6 +999,9 @@ def update_espace_cnaps(request_id):
             "emails/espace_cnaps_cree.html",
             prenom=req["prenom"],
             formation_name=formation_name,
+            logo_url=url_for("static", filename="logo.png", _external=True),
+            validation_url=f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}",
+            dracar_auth_url=DRACAR_AUTH_URL,
         )
         _send_email_html(req["email"], "Votre Espace Particulier CNAPS est créé", html)
 
@@ -985,6 +1013,35 @@ def update_espace_cnaps(request_id):
         _send_sms(req["telephone"], sms)
 
     return ("", 204)
+
+
+@app.route("/espace-cnaps/validation/<token>", methods=["GET"])
+def validate_espace_cnaps(token):
+    clean_token = (token or "").strip()
+    if not clean_token:
+        abort(404)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id, prenom, espace_cnaps FROM public_requests WHERE espace_cnaps_validation_token = ?",
+            (clean_token,),
+        ).fetchone()
+        if not req:
+            abort(404)
+
+        already_validated = (req["espace_cnaps"] or "") == "Validé"
+        if not already_validated:
+            conn.execute(
+                "UPDATE public_requests SET espace_cnaps = 'Validé', updated_at = datetime('now','localtime') WHERE id = ?",
+                (req["id"],),
+            )
+
+    return render_template(
+        "public_espace_cnaps_valide.html",
+        prenom=req["prenom"],
+        already_validated=already_validated,
+    )
 
 
 @app.route("/a-traiter/<int:request_id>/assign", methods=["POST"])
