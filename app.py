@@ -805,14 +805,19 @@ def review_documents(request_id):
             status = request.form.get(f"status_{doc_id}")
             reason = (request.form.get(f"reason_{doc_id}") or "").strip()
             is_conforme = None
+            reviewed_at = None
             if status == "conforme":
                 is_conforme = 1
                 reason = ""
+                reviewed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             elif status == "non_conforme":
                 is_conforme = 0
+                reviewed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                reason = ""
             conn.execute(
-                "UPDATE request_documents SET is_conforme = ?, non_conformite_reason = ?, reviewed_at = datetime('now','localtime') WHERE id = ?",
-                (is_conforme, reason, doc_id),
+                "UPDATE request_documents SET is_conforme = ?, non_conformite_reason = ?, reviewed_at = ? WHERE id = ?",
+                (is_conforme, reason, reviewed_at, doc_id),
             )
 
     return redirect(url_for("request_documents", request_id=request_id))

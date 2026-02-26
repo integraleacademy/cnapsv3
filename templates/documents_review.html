@@ -141,6 +141,12 @@
       min-width: 150px;
     }
 
+    .status-pill.pending {
+      color: #92400e;
+      background: #fffbeb;
+      border-color: #fcd34d;
+    }
+
     .status-pill.conforme {
       color: #15803d;
       background: var(--success-bg);
@@ -151,6 +157,13 @@
       color: #b91c1c;
       background: var(--danger-bg);
       border-color: #fca5a5;
+    }
+
+    input[type="radio"]:checked + .status-pill.pending {
+      color: #fff;
+      background: #d97706;
+      border-color: #d97706;
+      box-shadow: 0 8px 18px rgba(217, 119, 6, 0.25);
     }
 
     input[type="radio"]:checked + .status-pill.conforme {
@@ -240,6 +253,10 @@
             <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
 
             <div class="status-row">
+              <label>
+                <input type="radio" name="status_{{ d.id }}" value="pending" {% if d.is_conforme is none %}checked{% endif %}>
+                <span class="status-pill pending">⏳ En attente de traitement</span>
+              </label>
               <label>
                 <input type="radio" name="status_{{ d.id }}" value="conforme" {% if d.is_conforme==1 %}checked{% endif %}>
                 <span class="status-pill conforme">✅ Conforme</span>
