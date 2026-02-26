@@ -649,13 +649,24 @@ def lookup_cnaps():
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
 
 DOC_LABELS = {
-    "identity": "Pièce d'identité (recto/verso) ou passeport",
+    "identity": "Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour de la personne",
     "proof_address": "Justificatif de domicile de moins de 3 mois",
-    "host_identity": "Pièce d'identité de l'hébergeant",
+    "criminal_record": "Casier judiciaire du pays de naissance (moins de 3 mois, traduit) > si fourni",
+    "french_diploma_tcf": "Diplôme français supérieur au brevet ou Test TCF officiel (moins de 2 ans) > si fourni",
+    "host_identity": "HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour",
     "hosting_certificate": "Attestation d'hébergement signée",
-    "criminal_record": "Casier judiciaire traduit",
-    "french_diploma_tcf": "Diplôme français supérieur au brevet ou TCF",
 }
+
+DOC_REVIEW_SECTIONS = [
+    {
+        "title": "Documents de l'usager",
+        "doc_types": ["identity", "proof_address", "criminal_record", "french_diploma_tcf"],
+    },
+    {
+        "title": "Hébergement",
+        "doc_types": ["host_identity", "hosting_certificate"],
+    },
+]
 
 CHECKLIST_LABELS = [
     "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
@@ -811,8 +822,6 @@ def _required_doc_types(heberge: int, non_francais: int):
     required = ["identity", "proof_address"]
     if heberge:
         required.extend(["host_identity", "hosting_certificate"])
-    if non_francais:
-        required.extend(["criminal_record", "french_diploma_tcf"])
     return required
 
 
@@ -876,12 +885,15 @@ def public_form():
 
     required = _required_doc_types(heberge, non_francais)
     uploaded = {}
-    for doc_type in required:
+    all_doc_types = list(DOC_LABELS.keys())
+    for doc_type in all_doc_types:
         files = request.files.getlist(doc_type)
         cleaned = [f for f in files if f and f.filename]
-        if not cleaned:
+        if doc_type in required and not cleaned:
             flash(f"Document manquant : {DOC_LABELS[doc_type]}", "public_error")
             return redirect(url_for("public_form"))
+        if not cleaned:
+            continue
         for f in cleaned:
             filename = (f.filename or "").lower()
             if not filename.endswith(".pdf"):
@@ -1167,7 +1179,13 @@ def request_documents(request_id):
     for d in docs:
         grouped.setdefault(d["doc_type"], []).append(d)
 
-    return render_template("documents_review.html", req=req, grouped=grouped, doc_labels=DOC_LABELS)
+    return render_template(
+        "documents_review.html",
+        req=req,
+        grouped=grouped,
+        doc_labels=DOC_LABELS,
+        doc_sections=DOC_REVIEW_SECTIONS,
+    )
 
 
 @app.route("/uploads/<int:request_id>/<path:filename>")
