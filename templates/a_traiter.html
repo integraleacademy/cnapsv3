@@ -106,10 +106,13 @@
 
     .btn.danger {
       background: var(--danger);
+    }
+
+    form[action^="/delete/"] .btn.danger {
       margin-top: 6px;
     }
 
-    .orange {
+    .btn.warning-pending {
       background: var(--warning);
       animation: pulse 1.2s infinite;
     }
@@ -179,6 +182,8 @@
     <tbody>
     {% for r in requests %}
       {% set all_docs_conformes = (r.total_docs > 0 and r.total_docs == r.conformes) %}
+      {% set has_non_conformes = (r.non_conformes > 0) %}
+      {% set has_pending_docs = (r.en_attente > 0) %}
       <tr>
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
@@ -199,7 +204,7 @@
           {% endif %}
         </td>
         <td>
-          <a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a>
+          <a class="btn {% if has_pending_docs %}warning-pending{% elif all_docs_conformes %}success{% elif has_non_conformes %}danger{% endif %}" href="/a-traiter/{{ r.id }}/documents">{% if all_docs_conformes %}✅ {% endif %}Gérer les documents</a>
         </td>
         <td>
           {% if all_docs_conformes %}
