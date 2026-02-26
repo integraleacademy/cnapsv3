@@ -46,6 +46,10 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@integrale-academy.fr")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "").strip()
+BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "").strip()
+BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "").strip() or "Intégrale Academy"
+BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
@@ -631,28 +635,78 @@ CHECKLIST_LABELS = [
 
 
 def _send_email_html(to_email: str, subject: str, html: str):
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[EMAIL MOCK] to={to_email} subject={subject}")
-        print(html)
+    text_content = "Votre client mail ne supporte pas le HTML."
+
+    if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = SMTP_FROM
+        msg["To"] = to_email
+        msg.set_content(text_content)
+        msg.add_alternative(html, subtype="html")
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
         return
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = SMTP_FROM
-    msg["To"] = to_email
-    msg.set_content("Votre client mail ne supporte pas le HTML.")
-    msg.add_alternative(html, subtype="html")
+    if BREVO_API_KEY and BREVO_SENDER_EMAIL:
+        payload = json.dumps(
+            {
+                "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html,
+                "textContent": text_content,
+            }
+        ).encode("utf-8")
+        req = urllib_request.Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=payload,
+            headers={
+                "accept": "application/json",
+                "api-key": BREVO_API_KEY,
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib_request.urlopen(req, timeout=10):
+            pass
+        return
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.send_message(msg)
+    print(f"[EMAIL MOCK] to={to_email} subject={subject}")
+    print(html)
 
 
 def _send_sms(to_phone: str, message: str):
     if not to_phone:
         return
+
     if not SMS_WEBHOOK_URL:
+        if BREVO_API_KEY and BREVO_SMS_SENDER:
+            payload = json.dumps(
+                {
+                    "sender": BREVO_SMS_SENDER,
+                    "recipient": to_phone,
+                    "content": message,
+                    "type": "transactional",
+                }
+            ).encode("utf-8")
+            req = urllib_request.Request(
+                "https://api.brevo.com/v3/transactionalSMS/sms",
+                data=payload,
+                headers={
+                    "accept": "application/json",
+                    "api-key": BREVO_API_KEY,
+                    "content-type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib_request.urlopen(req, timeout=10):
+                pass
+            return
+
         print(f"[SMS MOCK] to={to_phone}")
         print(message)
         return
