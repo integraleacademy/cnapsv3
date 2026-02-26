@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>A traiter</title>
+<style>body{font-family:Arial;background:#f4f6fb;margin:0} .wrap{max-width:1200px;margin:24px auto;background:#fff;padding:20px;border-radius:14px} table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left} .btn{padding:8px 10px;border-radius:8px;border:none;cursor:pointer;background:#2d6cdf;color:white} .btn.grey{background:#9ca3af;cursor:not-allowed} .orange{background:#f59e0b;animation:pulse 1.2s infinite} @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.6)}100%{box-shadow:0 0 0 14px rgba(245,158,11,0)}}</style>
+</head><body><div class="wrap">
+  <h1>Onglet A traiter</h1><a href="/">← Retour</a>
+  <table><thead><tr><th>Nom</th><th>Prénom</th><th>Affecter une formation</th><th>Formation</th><th>Dates de formation</th><th>Générer attestation</th><th>Gérer les documents</th><th>Télécharger les documents</th><th>Statut CNAPS</th><th>Ajouter un commentaire / Supprimer</th></tr></thead><tbody>
+  {% for r in requests %}
+    <tr>
+      <td>{{ r.nom }}</td><td>{{ r.prenom }}</td>
+      <td>
+        {% if r.formation and r.session_date %}
+          <button class="btn grey" disabled>Affectée</button>
+        {% else %}
+          <button class="btn" onclick="openAssign({{ r.id }})">Affecter une formation</button>
+        {% endif %}
+      </td>
+      <td>{{ r.formation or '-' }}</td>
+      <td>{{ r.session_date or '-' }}</td>
+      <td>{% if r.dossier_id and r.formation %}<a class="btn" href="/attestation/{{ r.dossier_id }}">Générer</a>{% else %}-{% endif %}</td>
+      <td><a class="btn {% if r.updated_at and r.created_at != r.updated_at %}orange{% endif %}" href="/a-traiter/{{ r.id }}/documents">Gérer les documents</a></td>
+      <td><a class="btn" href="/a-traiter/{{ r.id }}/download">Télécharger les documents</a></td>
+      <td>{{ r.statut_cnaps or 'A TRAITER' }}</td>
+      <td>
+        <form action="/commentaire/{{ r.dossier_id }}" method="post"><input name="commentaire" placeholder="Commentaire" style="padding:8px;border:1px solid #ddd;border-radius:8px"><button class="btn" type="submit">Ajouter</button></form>
+        <form action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')"><button class="btn" style="background:#dc2626;margin-top:6px">Supprimer</button></form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+<dialog id="assignDialog"><form id="assignForm" method="post"><h3>Affecter une formation</h3><label>Formation</label><select name="formation" required><option value="APS">APS</option><option value="A3P">A3P</option></select><label>Date</label><input type="text" name="session_date" required placeholder="Ex: Du 5 janvier au 6 février 2026"><div><button class="btn" type="submit">Valider</button> <button type="button" onclick="assignDialog.close()">Annuler</button></div></form></dialog>
+<script>
+const assignDialog=document.getElementById('assignDialog'); const assignForm=document.getElementById('assignForm');
+function openAssign(id){assignForm.action=`/a-traiter/${id}/assign`; assignDialog.showModal();}
+</script>
+</body></html>
