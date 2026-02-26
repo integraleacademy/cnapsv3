@@ -33,7 +33,7 @@ app.config.update(
 # Identifiants admin (via variables Render)
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower().strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-PUBLIC_FORM_URL = os.getenv("PUBLIC_FORM_URL", "https://cnapsv5.onrender.com/formulaire-public")
+PUBLIC_FORM_URL = os.getenv("PUBLIC_FORM_URL", "https://cnapsv5.onrender.com/")
 
 
 DB_NAME = "/mnt/data/cnaps.db"
