@@ -267,6 +267,20 @@
           {% elif espace == 'Créé' and r.cnaps_expiration_label %}
             <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
           {% endif %}
+          {% if r.cnaps_reminder_4h_sent_label or r.cnaps_reminder_2h_sent_label %}
+            <div class="cnaps-expiration" style="margin-top:6px;">✅ Relance envoyée
+              {% if r.cnaps_reminder_2h_sent_label %}
+                (2h: {{ r.cnaps_reminder_2h_sent_label }})
+              {% elif r.cnaps_reminder_4h_sent_label %}
+                (4h: {{ r.cnaps_reminder_4h_sent_label }})
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="cnaps-expiration" style="margin-top:6px;">Aucune relance envoyée</div>
+          {% endif %}
+          <div style="margin-top:8px;">
+            <a class="btn" href="/a-traiter/{{ r.id }}/relance-preview" target="_blank" rel="noopener">Voir la relance prévue</a>
+          </div>
         </td>
         <td>
           <form action="/statut_cnaps/{{ r.dossier_id }}" method="post">
