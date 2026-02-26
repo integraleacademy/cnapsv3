@@ -66,6 +66,7 @@ FORMATION_SESSIONS = {
 
 DB_NAME = "/mnt/data/cnaps.db"
 UPLOAD_DIR = "/mnt/data/uploads"
+MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 
 
 def init_db():
@@ -599,6 +600,15 @@ def _secure_store(file_storage, subfolder):
     return original, safe_name, os.path.relpath(absolute_path, UPLOAD_DIR)
 
 
+def _file_size_bytes(file_storage):
+    stream = file_storage.stream
+    current_pos = stream.tell()
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    stream.seek(current_pos)
+    return size
+
+
 @app.route("/public-form", methods=["GET", "POST"])
 def public_form():
     if request.method == "GET":
@@ -639,6 +649,10 @@ def public_form():
         if not cleaned:
             flash(f"Document manquant : {DOC_LABELS[doc_type]}", "error")
             return redirect(url_for("public_form"))
+        for f in cleaned:
+            if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
+                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                return redirect(url_for("public_form"))
         uploaded[doc_type] = cleaned
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -829,6 +843,9 @@ def replace_documents(request_id):
             for doc in invalids:
                 incoming = request.files.get(f"replace_{doc['id']}")
                 if incoming and incoming.filename:
+                    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
+                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
                     conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
                     original, stored, rel_path = _secure_store(incoming, str(request_id))
                     conn.execute(
@@ -867,6 +884,19 @@ def download_full_bundle(request_id):
 
         if not docs or any(d["is_conforme"] != 1 for d in docs):
             return "Tous les documents doivent être conformes avant téléchargement.", 400
+
+        oversized_docs = []
+        for d in docs:
+            source = os.path.join(UPLOAD_DIR, d["storage_path"])
+            if os.path.exists(source) and os.path.getsize(source) > MAX_DOCUMENT_SIZE_BYTES:
+                oversized_docs.append(d["original_name"])
+
+        if oversized_docs:
+            return (
+                "Téléchargement impossible : chaque document doit faire 5 Mo maximum. "
+                f"Document(s) à remplacer : {', '.join(oversized_docs)}",
+                400,
+            )
 
         dossier = conn.execute("SELECT * FROM dossiers WHERE id = ?", (req["dossier_id"],)).fetchone()
 
