@@ -234,6 +234,7 @@
             >
               Lien Espace DRACAR
             </a>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Le mot de passe est copié automatiquement au clic.</div>
           </div>
         </td>
         <td>
@@ -407,11 +408,24 @@ document.querySelectorAll('.dracar-link').forEach(link => {
       return;
     }
 
-    if (navigator.clipboard && window.isSecureContext && (login || password)) {
-      navigator.clipboard.writeText(`Login : ${login}\nMot de passe : ${password}`).catch(() => {});
+    window.open(dracarUrl.toString(), '_blank', 'noopener');
+
+    const credentialsLabel = `Login : ${login}\nMot de passe : ${password}`;
+    const canUseClipboard = navigator.clipboard && window.isSecureContext && (login || password);
+
+    if (canUseClipboard) {
+      navigator.clipboard
+        .writeText(credentialsLabel)
+        .then(() => {
+          window.alert('Identifiants DRACAR copiés. Collez le mot de passe dans le champ avec Ctrl+V.');
+        })
+        .catch(() => {
+          window.prompt('Copiez les identifiants DRACAR :', credentialsLabel);
+        });
+      return;
     }
 
-    window.open(dracarUrl.toString(), '_blank', 'noopener');
+    window.prompt('Copiez les identifiants DRACAR :', credentialsLabel);
   });
 });
 </script>
