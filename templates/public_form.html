@@ -169,36 +169,38 @@
       </div>
       <div class="section">
         <div class="section-badge">📄 Étape 2</div>
-        <h2>Documents à déposer</h2>
-        <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
-        <input type="file" name="identity" accept="application/pdf,.pdf" multiple required>
-        <div class="upload-status" data-upload-status="identity"></div>
-        <label>Justificatif de domicile de moins de 3 mois</label>
-        <p class="hint">Uniquement facture gaz/électricité/eau ou quittance de loyer (pas téléphone).</p>
-        <input type="file" name="proof_address" accept="application/pdf,.pdf" required>
-        <div class="upload-status" data-upload-status="proof_address"></div>
-      </div>
-      <div class="section">
-        <div class="section-badge">🧩 Étape 3</div>
-        <h2>Documents complémentaires</h2>
-        <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto" {% if fd.get('heberge') == 'on' %}checked{% endif %}><label for="heberge">Cochez la case si vous êtes hébergé(e)</label></div>
-        <div id="heberge_bloc" class="hidden">
+        <h2>Documents à traiter</h2>
+
+        <div class="section">
+          <div class="section-badge">👤 Documents de l'usager</div>
+          <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour de la personne</label>
+          <input type="file" name="identity" accept="application/pdf,.pdf" multiple required>
+          <div class="upload-status" data-upload-status="identity"></div>
+
+          <label>Justificatif de domicile de moins de 3 mois</label>
+          <p class="hint">Uniquement facture gaz/électricité/eau ou quittance de loyer (pas téléphone).</p>
+          <input type="file" name="proof_address" accept="application/pdf,.pdf" required>
+          <div class="upload-status" data-upload-status="proof_address"></div>
+
+          <label>Casier judiciaire du pays de naissance (moins de 3 mois, traduit) <strong>&gt; si fourni</strong></label>
+          <input type="file" name="criminal_record" accept="application/pdf,.pdf">
+          <div class="upload-status" data-upload-status="criminal_record"></div>
+
+          <label>Diplôme français supérieur au brevet ou Test TCF officiel (moins de 2 ans) <strong>&gt; si fourni</strong></label>
+          <input type="file" name="french_diploma_tcf" accept="application/pdf,.pdf">
+          <div class="upload-status" data-upload-status="french_diploma_tcf"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-badge">🏠 Hébergement</div>
           <label>HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
           <input type="file" name="host_identity" accept="application/pdf,.pdf" multiple>
           <div class="upload-status" data-upload-status="host_identity"></div>
+
           <label>Attestation d'hébergement signée</label>
           <p class="hint">Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank">service-public.gouv.fr</a></p>
           <input type="file" name="hosting_certificate" accept="application/pdf,.pdf">
           <div class="upload-status" data-upload-status="hosting_certificate"></div>
-        </div>
-        <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto" {% if fd.get('non_francais') == 'on' %}checked{% endif %}><label for="non_francais">Cochez la case si vous n'avez pas la nationalité française</label></div>
-        <div id="non_francais_bloc" class="hidden">
-          <label>Casier judiciaire du pays de naissance (moins de 3 mois, traduit)</label>
-          <input type="file" name="criminal_record" accept="application/pdf,.pdf">
-          <div class="upload-status" data-upload-status="criminal_record"></div>
-          <label>Diplôme français supérieur au brevet ou Test TCF officiel (moins de 2 ans)</label>
-          <input type="file" name="french_diploma_tcf" accept="application/pdf,.pdf">
-          <div class="upload-status" data-upload-status="french_diploma_tcf"></div>
         </div>
       </div>
       <div class="section checks">
@@ -223,8 +225,6 @@
     </form>
   </div>
   <script>
-    const heberge=document.getElementById('heberge'), hb=document.getElementById('heberge_bloc');
-    const nonFr=document.getElementById('non_francais'), nb=document.getElementById('non_francais_bloc');
     const birthDateInput = document.getElementById('date_naissance');
 
     function formatBirthDate(value) {
@@ -299,11 +299,6 @@
       });
     });
 
-    function sync(){hb.classList.toggle('hidden',!heberge.checked);nb.classList.toggle('hidden',!nonFr.checked);
-      ['host_identity','hosting_certificate'].forEach(n=>document.querySelector(`[name="${n}"]`).required=heberge.checked);
-      ['criminal_record','french_diploma_tcf'].forEach(n=>document.querySelector(`[name="${n}"]`).required=nonFr.checked);
-    }
-    heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
   </script>
 </body>
 </html>
