@@ -45,6 +45,25 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@integrale-academy.fr")
 
+FORMATION_SESSIONS = {
+    "APS": [
+        "Du 5 janvier au 6 février 2026",
+        "Du 23 mars au 27 avril 2026",
+        "Du 26 mai au 29 juin 2026",
+        "Du 8 juillet au 12 août 2026",
+        "Du 7 septembre au 9 octobre 2026",
+        "Du 3 novembre au 8 décembre 2026",
+    ],
+    "A3P": [
+        "Du 14 octobre au 9 décembre 2025",
+        "Du 5 janvier au 16 mars 2026",
+        "Du 30 mars au 2 juin 2026",
+        "Du 8 juin au 4 août 2026",
+        "Du 1er septembre au 27 octobre 2026",
+        "Du 9 novembre 2026 au 19 janvier 2027",
+    ],
+}
+
 DB_NAME = "/mnt/data/cnaps.db"
 UPLOAD_DIR = "/mnt/data/uploads"
 
@@ -221,6 +240,7 @@ def index():
         statuts_disponibles=statuts_disponibles,
         public_form_url=PUBLIC_FORM_URL,
         a_traiter_count=a_traiter_count,
+        formation_sessions=FORMATION_SESSIONS,
     )
 
 
@@ -676,7 +696,7 @@ def a_traiter():
             """
         ).fetchall()
 
-    return render_template("a_traiter.html", requests=rows)
+    return render_template("a_traiter.html", requests=rows, formation_sessions=FORMATION_SESSIONS)
 
 
 @app.route("/a-traiter/<int:request_id>/assign", methods=["POST"])
@@ -684,7 +704,7 @@ def a_traiter():
 def assign_formation(request_id):
     formation = (request.form.get("formation") or "").strip()
     session_date = (request.form.get("session_date") or "").strip()
-    if formation not in ["APS", "A3P"] or not session_date:
+    if formation not in FORMATION_SESSIONS or session_date not in FORMATION_SESSIONS.get(formation, []):
         return jsonify({"ok": False, "error": "Paramètres invalides"}), 400
 
     with sqlite3.connect(DB_NAME) as conn:
