@@ -812,22 +812,22 @@ def public_form():
     non_francais = 1 if request.form.get("non_francais") == "on" else 0
 
     if not all([nom, prenom, email, email_confirm, date_naissance]):
-        flash("Tous les champs personnels sont obligatoires.", "error")
+        flash("Tous les champs personnels sont obligatoires.", "public_error")
         return redirect(url_for("public_form"))
 
     if email != email_confirm:
-        flash("L'email et sa confirmation doivent être identiques.", "error")
+        flash("L'email et sa confirmation doivent être identiques.", "public_error")
         return redirect(url_for("public_form"))
 
     try:
         datetime.strptime(date_naissance, "%d/%m/%Y")
     except ValueError:
-        flash("La date de naissance doit être au format DD/MM/YYYY.", "error")
+        flash("La date de naissance doit être au format DD/MM/YYYY.", "public_error")
         return redirect(url_for("public_form"))
 
     for item in CHECKLIST_LABELS:
         if request.form.get(item) != "on":
-            flash("Vous devez cocher toutes les cases de conformité.", "error")
+            flash("Vous devez cocher toutes les cases de conformité.", "public_error")
             return redirect(url_for("public_form"))
 
     required = _required_doc_types(heberge, non_francais)
@@ -836,15 +836,15 @@ def public_form():
         files = request.files.getlist(doc_type)
         cleaned = [f for f in files if f and f.filename]
         if not cleaned:
-            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "error")
+            flash(f"Document manquant : {DOC_LABELS[doc_type]}", "public_error")
             return redirect(url_for("public_form"))
         for f in cleaned:
             filename = (f.filename or "").lower()
             if not filename.endswith(".pdf"):
-                flash(f"Le document {f.filename} doit être au format PDF.", "error")
+                flash(f"Le document {f.filename} doit être au format PDF.", "public_error")
                 return redirect(url_for("public_form"))
             if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
-                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                flash(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
                 return redirect(url_for("public_form"))
         uploaded[doc_type] = cleaned
 
@@ -879,7 +879,11 @@ def public_form():
                     (request_id, doc_type, original, stored, rel_path),
                 )
 
-    email_html = render_template("emails/confirmation_depot.html", prenom=prenom)
+    email_html = render_template(
+        "emails/confirmation_depot.html",
+        prenom=prenom,
+        logo_url=url_for("static", filename="logo.png", _external=True),
+    )
     _send_email_html(
         email,
         "Confirmation de dépôt dossier CNAPS",
@@ -1200,7 +1204,7 @@ def replace_documents(request_id):
                         flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
                         return redirect(url_for("replace_documents", request_id=request_id))
                     if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
                         return redirect(url_for("replace_documents", request_id=request_id))
                     conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
                     original, stored, rel_path = _secure_store(incoming, str(request_id))
