@@ -264,7 +264,7 @@
             <textarea class="commentaire-input" data-id="{{ r.dossier_id }}" placeholder="Commentaire">{{ r.commentaire or '' }}</textarea>
             <div class="save-hint">Sauvegarde automatique</div>
           </form>
-          <form action="/delete/{{ r.dossier_id }}" method="post" onsubmit="return confirm('Supprimer ?')">
+          <form action="/a-traiter/{{ r.id }}/delete" method="post" onsubmit="return confirm('Supprimer ?')">
             <button class="btn danger" type="submit">Supprimer</button>
           </form>
         </td>

@@ -1012,6 +1012,34 @@ def assign_formation(request_id):
     return redirect(url_for("a_traiter"))
 
 
+@app.route("/a-traiter/<int:request_id>/delete", methods=["POST"])
+@login_required
+def delete_a_traiter_line(request_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+
+        req = conn.execute(
+            "SELECT dossier_id FROM public_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+
+        if req is None:
+            return redirect(url_for("a_traiter"))
+
+        conn.execute("DELETE FROM request_documents WHERE request_id = ?", (request_id,))
+        conn.execute(
+            "DELETE FROM request_non_conformity_notifications WHERE request_id = ?",
+            (request_id,),
+        )
+        conn.execute("DELETE FROM public_requests WHERE id = ?", (request_id,))
+
+        if req["dossier_id"]:
+            conn.execute("DELETE FROM statut_cnaps_history WHERE dossier_id = ?", (req["dossier_id"],))
+            conn.execute("DELETE FROM dossiers WHERE id = ?", (req["dossier_id"],))
+
+    return redirect(url_for("a_traiter"))
+
+
 @app.route("/a-traiter/<int:request_id>/documents")
 @login_required
 def request_documents(request_id):
