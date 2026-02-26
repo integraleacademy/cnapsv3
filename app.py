@@ -15,6 +15,7 @@ from io import BytesIO
 from email.message import EmailMessage
 import smtplib
 from urllib import request as urllib_request
+from urllib.error import HTTPError, URLError
 import json
 
 
@@ -671,8 +672,18 @@ def _send_email_html(to_email: str, subject: str, html: str):
             },
             method="POST",
         )
-        with urllib_request.urlopen(req, timeout=10):
-            pass
+        try:
+            with urllib_request.urlopen(req, timeout=10):
+                pass
+        except HTTPError as exc:
+            error_body = ""
+            if exc.fp is not None:
+                error_body = exc.fp.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Brevo email rejected request with status={exc.code}: {error_body}"
+            ) from exc
+        except URLError as exc:
+            raise RuntimeError(f"Brevo email request failed: {exc.reason}") from exc
         return
 
     print(f"[EMAIL MOCK] to={to_email} subject={subject}")
@@ -1068,10 +1079,17 @@ def notify_non_conformities(request_id):
         if not req or not docs:
             return redirect(url_for("request_documents", request_id=request_id))
 
-        token = uuid.uuid4().hex
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
         html = render_template("emails/non_conformite.html", prenom=req["prenom"], docs=docs, labels=DOC_LABELS, replace_url=replace_url)
-        _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
+        try:
+            _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
+        except RuntimeError as exc:
+            app.logger.exception("Échec envoi email non-conformités request_id=%s", request_id)
+            flash(
+                "Impossible d'envoyer l'email de non-conformité. Vérifie la configuration email (Brevo/SMTP) et réessaie.",
+                "error",
+            )
+            return redirect(url_for("request_documents", request_id=request_id))
 
         conn.execute("INSERT INTO request_non_conformity_notifications (request_id) VALUES (?)", (request_id,))
 
