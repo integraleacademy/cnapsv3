@@ -194,7 +194,7 @@
     </header>
 
     <section class="content">
-      <p class="info">Les éléments ci-dessous nécessitent un nouveau fichier. Formats recommandés : PDF, JPG ou PNG lisibles.</p>
+      <p class="info">Les éléments ci-dessous nécessitent un nouveau fichier. Format accepté : PDF uniquement.</p>
 
       <form method="post" enctype="multipart/form-data">
         {% for d in invalids %}
@@ -202,7 +202,7 @@
             <div class="doc-title">{{ labels.get(d.doc_type, d.doc_type) }}</div>
             <div class="reason">⚠️ Raison : {{ d.non_conformite_reason or 'Non précisée' }}</div>
             <p class="file-help">Choisissez une version nette et complète du document.</p>
-            <input type="file" name="replace_{{ d.id }}" required>
+            <input type="file" name="replace_{{ d.id }}" accept="application/pdf,.pdf" required>
           </section>
         {% endfor %}
 
