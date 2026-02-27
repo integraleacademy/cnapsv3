@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Espace CNAPS créé</title>
+  <title>⚠️ Formation sécurité Validation de votre compte CNAPS</title>
   <style>
     @keyframes ctaPulse {
       0%, 100% {
@@ -57,32 +57,45 @@
                 Nous revenons vers vous concernant la formation <strong>{{ formation_name }}</strong>.
               </p>
               <p>
-                Votre <strong>Espace Particulier CNAPS</strong> est bien créé. Afin que nous puissions déposer votre dossier
-                auprès du CNAPS (Ministère de l'intérieur) dans les meilleurs délais,
-                merci de <strong>valider votre compte</strong> via le lien reçu par mail de la part du CNAPS DRACAR ULTIMATE.
+                Nous venons de créer votre compte CNAPS. Vous avez dû recevoir un mail de la part du CNAPS (Ministère de l'intérieur)
+                qui vous invite à finaliser la création de votre compte.
               </p>
 
               <p style="padding:12px 14px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;margin:16px 0;">
-                ⚠️ Attention : le lien CNAPS expire dans un délai de <strong>12 heures</strong>.
+                ⚠️ Attention, le lien CNAPS expire dans un délai de <strong>12 heures</strong>, soit aujourd'hui à <strong>{{ expiration_time }}</strong>.
+              </p>
+
+              <p style="margin:16px 0 8px 0;"><strong>Que faire maintenant ?</strong></p>
+
+              <p style="margin:8px 0;"><strong>1️⃣ Cliquer sur "Lien vers la vérification de l'adresse e-mail"</strong> dans le mail que vous avez reçu de la part du CNAPS.</p>
+              <p style="margin:10px 0 14px 0;">
+                <img src="{{ dracar2_url }}" alt="Exemple du mail CNAPS avec le lien de vérification" style="display:block;width:100%;max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:10px;">
+              </p>
+
+              <p style="padding:12px 14px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;margin:16px 0;">
+                ⚠️ Attention, le lien CNAPS expire dans un délai de <strong>12 heures</strong>, soit aujourd'hui à <strong>{{ expiration_time }}</strong>.
               </p>
 
               <p style="margin:18px 0 8px 0;">
-                Dès que vous aurez validé votre Espace Particulier CNAPS, veuillez cliquer sur ce bouton :
+                <strong>2️⃣ Nous indiquer que votre compte CNAPS a bien été validé en cliquant sur ce bouton :</strong>
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:10px auto 14px auto;">
                 <tr>
                   <td>
-                    <a href="{{ validation_url }}" class="cta-button">J'ai validé mon compte Espace Particulier</a>
+                    <a href="{{ validation_url }}" class="cta-button">J'ai validé mon compte CNAPS</a>
                   </td>
                 </tr>
               </table>
 
-              <p>Nous vous remercions par avance.</p>
+              <p style="margin:0 0 16px 0;"><strong>Merci de cliquer sur ce bouton uniquement si vous avez bien validé votre compte CNAPS.</strong></p>
+
+              <p style="margin:12px 0;"><strong>3️⃣ Tout est OK, vous n'avez plus rien d'autre à faire :</strong> nous allons nous occuper de toutes les démarches administratives (dépôt de votre dossier de demande d'autorisation auprès du CNAPS).</p>
+
+              <p>Nous vous remercions par avance,</p>
               <p style="margin-top:24px;margin-bottom:4px;">
-                Clément VAILLANT
+                La Team Intégrale Academy
               </p>
-              <p style="margin:0;color:#6b7280;">Directeur Intégrale Academy</p>
             </td>
           </tr>
           <tr>

@@ -1250,18 +1250,21 @@ def update_espace_cnaps(request_id):
 
     if old_status != "Créé" and nouvel_etat == "Créé":
         formation_name = _formation_full_name(req["formation"])
+        expiration_time = _cnaps_expiration_label(_now_france() + timedelta(hours=12)).split(" à ")[-1]
         html = render_template(
             "emails/espace_cnaps_cree.html",
             prenom=req["prenom"],
             formation_name=formation_name,
             logo_url=url_for("static", filename="logo.png", _external=True),
+            dracar2_url=url_for("static", filename="dracar.png", _external=True),
             validation_url=f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}",
+            expiration_time=expiration_time,
             dracar_auth_url=DRACAR_AUTH_URL,
         )
         recipient_email = (req["email"] or "").strip()
         if recipient_email:
             try:
-                _send_email_html(recipient_email, "Votre Espace Particulier CNAPS est créé", html)
+                _send_email_html(recipient_email, "⚠️ Formation sécurité Validation de votre compte CNAPS", html)
             except Exception:
                 app.logger.exception(
                     "Échec envoi email espace CNAPS request_id=%s email=%r",
