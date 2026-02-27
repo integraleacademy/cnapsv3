@@ -1143,6 +1143,54 @@ def _send_cnaps_reminders(conn, requests_rows):
             )
 
 
+def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
+    if reminder_kind not in {"4h", "2h"}:
+        raise ValueError("Type de rappel invalide")
+
+    timing = _compute_cnaps_timing(req)
+    expiration_label = timing["cnaps_expiration_label"] or _cnaps_expiration_label(_now_france() + timedelta(hours=12))
+    formation_name = _formation_full_name(req.get("formation"))
+    recipient_email = (req.get("email") or "").strip()
+    now_db = _to_db_datetime(_now_france())
+
+    if reminder_kind == "4h":
+        if recipient_email:
+            html = render_template(
+                "emails/espace_cnaps_rappel_4h.html",
+                formation_name=formation_name,
+                logo_url=url_for("static", filename="logo.png", _external=True),
+            )
+            _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
+
+        _send_sms(
+            req.get("telephone"),
+            f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
+        )
+        conn.execute(
+            "UPDATE public_requests SET cnaps_reminder_4h_sent_at = ? WHERE id = ?",
+            (now_db, req["id"]),
+        )
+    else:
+        if recipient_email:
+            html = render_template(
+                "emails/espace_cnaps_rappel_2h.html",
+                formation_name=formation_name,
+                logo_url=url_for("static", filename="logo.png", _external=True),
+            )
+            _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
+
+        _send_sms(
+            req.get("telephone"),
+            f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
+        )
+        conn.execute(
+            "UPDATE public_requests SET cnaps_reminder_2h_sent_at = ? WHERE id = ?",
+            (now_db, req["id"]),
+        )
+
+    return _cnaps_expiration_label(_parse_db_datetime(now_db))
+
+
 def _sanitize_zip_component(value: str) -> str:
     """Évite les séparateurs de dossiers dans les noms de fichiers du ZIP."""
     cleaned = (value or "document").replace("/", "-").replace("\\", "-")
@@ -1461,6 +1509,47 @@ def update_espace_cnaps(request_id):
         )
 
     return ("", 204)
+
+
+@app.route("/a-traiter/<int:request_id>/cnaps-reminder", methods=["POST"])
+@login_required
+def send_cnaps_manual_reminder(request_id):
+    data = request.get_json(silent=True) or {}
+    reminder_kind = (data.get("reminder_kind") or "").strip()
+    if reminder_kind not in {"4h", "2h"}:
+        return jsonify({"ok": False, "error": "Type de rappel invalide"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        telephone_expr = _request_phone_select_expr(conn)
+        req = conn.execute(
+            f"""
+            SELECT pr.*, {telephone_expr} AS telephone
+            FROM public_requests pr
+            LEFT JOIN dossiers d ON d.id = pr.dossier_id
+            WHERE pr.id = ?
+            """,
+            (request_id,),
+        ).fetchone()
+
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        if (req["espace_cnaps"] or "") != "Créé":
+            return jsonify({"ok": False, "error": "Le rappel est disponible uniquement pour les espaces CNAPS créés"}), 400
+
+        try:
+            sent_label = _send_cnaps_manual_reminder(conn, dict(req), reminder_kind)
+        except Exception as exc:
+            app.logger.exception(
+                "Echec envoi rappel manuel CNAPS request_id=%s reminder=%s error=%s",
+                request_id,
+                reminder_kind,
+                exc,
+            )
+            return jsonify({"ok": False, "error": "Échec de l'envoi du rappel"}), 500
+
+    return jsonify({"ok": True, "sent_label": sent_label})
 
 
 @app.route("/espace-cnaps/validation/<token>", methods=["GET"])
