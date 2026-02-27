@@ -999,7 +999,7 @@ def public_form():
     if email != email_confirm:
         return _render_with_error("L'email et sa confirmation doivent être identiques.")
 
-    if not normalize_phone_for_sms(telephone):
+    if not _normalize_phone_number(telephone):
         return _render_with_error("Le numéro de téléphone portable est invalide.")
 
     try:
