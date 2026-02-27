@@ -919,17 +919,18 @@ def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation
     safe_formation = (formation_name or "").strip() or "votre formation"
     safe_validation_url = (validation_url or "").strip()
     return (
-        "⚠️Formation sécurité Intégrale Academy - INFO IMPORTANTE ⚠️\n"
-        f"Bonjour {safe_prenom},\n"
-        f"Je reviens vers vous concernant la formation {safe_formation}. "
-        "Vous avez du recevoir un mail de la part du CNAPS (Ministère de l'intérieur). "
-        "Vous devez simplement valider votre adresse e-mail pour finaliser la création de votre "
-        "compte en cliquant sur le lien dans le mail que vous avez reçu.\n\n"
-        "⏳ Attention le lien expire dans moins de 12 heures. Au delà de ce délai nous devrons "
-        "recommencer toute la procédure.\n\n"
-        "Une fois votre compte CNAPS validé, cliquez ici pour nous informer : "
+        "⚠️ Formation sécurité — Intégrale Academy\n"
+        "INFO IMPORTANTE\n\n"
+        f"Bonjour {safe_prenom},\n\n"
+        f"Concernant la formation {safe_formation} :\n"
+        "1) Vous avez dû recevoir un e-mail du CNAPS (Ministère de l'Intérieur).\n"
+        "2) Ouvrez cet e-mail et cliquez sur le lien pour valider votre adresse e-mail.\n"
+        "3) Cette validation finalise la création de votre compte CNAPS.\n\n"
+        "⏳ Attention : le lien expire dans moins de 12 heures.\n"
+        "Passé ce délai, nous devrons recommencer toute la procédure.\n\n"
+        "✅ Une fois votre compte CNAPS validé, confirmez-le ici :\n"
         f"{safe_validation_url}\n\n"
-        "Merci par avance,\n\n"
+        "Merci,\n"
         "Intégrale Academy"
     )
 
