@@ -117,9 +117,35 @@
       animation: pulse 1.2s infinite;
     }
 
+    .btn.demande-a-faire-row {
+      margin-top: 8px;
+      background: var(--danger);
+      animation: pulse-danger 1.2s infinite;
+    }
+
+    .btn.demande-summary {
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .btn.demande-summary.zero {
+      background: var(--muted);
+      animation: none;
+    }
+
+    .btn.demande-summary.pending {
+      background: var(--warning);
+      animation: pulse 1.2s infinite;
+    }
+
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); }
       100% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
+    }
+
+    @keyframes pulse-danger {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .6); }
+      100% { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
     }
 
     .commentaire-input,
@@ -178,11 +204,21 @@
 </head>
 <body>
 <div class="wrap">
+  {% set demande_ns = namespace(total=0) %}
+  {% for item in requests %}
+    {% set item_espace = item.espace_cnaps or 'A créer' %}
+    {% set item_cnaps = item.statut_cnaps or '' %}
+    {% if item_espace == 'Validé' and item_cnaps == '' %}
+      {% set demande_ns.total = demande_ns.total + 1 %}
+    {% endif %}
+  {% endfor %}
+
   <div class="page-head">
     <div class="brand">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
       <h1>Demande CNAPS en cours</h1>
     </div>
+    <button id="demandeSummary" class="btn demande-summary {% if demande_ns.total == 0 %}zero{% else %}pending{% endif %}" type="button">{{ demande_ns.total }} Demande à faire</button>
     <a href="/">← Retour</a>
   </div>
 
@@ -267,10 +303,18 @@
           {% elif espace == 'Créé' and r.cnaps_expiration_label %}
             <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
           {% endif %}
+          {% set cnaps = r.statut_cnaps or '' %}
+          <button
+            type="button"
+            class="btn demande-a-faire-row"
+            data-demande-a-faire
+            {% if not (espace == 'Validé' and cnaps == '') %}hidden{% endif %}
+          >
+            Demande à faire
+          </button>
         </td>
         <td>
           <form action="/statut_cnaps/{{ r.dossier_id }}" method="post">
-            {% set cnaps = r.statut_cnaps or '' %}
             <select name="statut_cnaps" data-id="{{ r.dossier_id }}" class="cnaps-select {% if cnaps == 'TRANSMIS' %}statut-transmis{% elif cnaps == 'ENREGISTRÉ' %}statut-enregistre{% elif cnaps == 'INSTRUCTION' %}statut-instruction{% elif cnaps == 'ACCEPTÉ' %}statut-accepte{% elif cnaps == 'REFUSÉ' %}statut-refuse{% elif cnaps == 'DOCS COMPLEMENTAIRES' %}statut-docsmanquants{% else %}statut-default{% endif %}">
               <option value="">--</option>
               <option value="TRANSMIS" {% if cnaps == 'TRANSMIS' %}selected{% endif %}>TRANSMIS</option>
@@ -351,6 +395,34 @@ function applyCnapsClass(select){
   select.classList.add(map[value] || 'statut-default');
 }
 
+function shouldShowDemande(row){
+  const espaceSelect = row.querySelector("select[name='espace_cnaps']");
+  const statutSelect = row.querySelector("select[name='statut_cnaps']");
+  if (!espaceSelect || !statutSelect) return false;
+  return espaceSelect.value === 'Validé' && statutSelect.value === '';
+}
+
+function refreshDemandeIndicators(){
+  const rows = document.querySelectorAll('tbody tr');
+  let count = 0;
+
+  rows.forEach(row => {
+    const rowButton = row.querySelector('[data-demande-a-faire]');
+    if (!rowButton) return;
+
+    const visible = shouldShowDemande(row);
+    rowButton.hidden = !visible;
+    if (visible) count += 1;
+  });
+
+  const summaryButton = document.getElementById('demandeSummary');
+  if (!summaryButton) return;
+
+  summaryButton.textContent = `${count} Demande à faire`;
+  summaryButton.classList.remove('zero', 'pending');
+  summaryButton.classList.add(count === 0 ? 'zero' : 'pending');
+}
+
 function applyEspaceClass(select){
   const value = select.value;
   const map = {
@@ -373,7 +445,10 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ statut_cnaps: select.value })
-    }).then(() => applyCnapsClass(select));
+    }).then(() => {
+      applyCnapsClass(select);
+      refreshDemandeIndicators();
+    });
   });
 });
 
@@ -387,9 +462,14 @@ document.querySelectorAll("select[name='espace_cnaps']").forEach(select => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ espace_cnaps: select.value })
-    }).then(() => applyEspaceClass(select));
+    }).then(() => {
+      applyEspaceClass(select);
+      refreshDemandeIndicators();
+    });
   });
 });
+
+refreshDemandeIndicators();
 
 document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   let timeoutId;
