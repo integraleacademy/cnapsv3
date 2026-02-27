@@ -125,15 +125,21 @@ def _compute_cnaps_timing(req):
         return {
             "cnaps_expiration_dt": None,
             "cnaps_expiration_label": None,
+            "cnaps_reminder_4h_label": None,
+            "cnaps_reminder_2h_label": None,
             "cnaps_is_expired": False,
             "cnaps_remaining": None,
         }
 
     expiration_dt = created_at + timedelta(hours=12)
+    reminder_4h_dt = expiration_dt - timedelta(hours=4)
+    reminder_2h_dt = expiration_dt - timedelta(hours=2)
     remaining = expiration_dt - _now_france()
     return {
         "cnaps_expiration_dt": expiration_dt,
         "cnaps_expiration_label": _cnaps_expiration_label(expiration_dt),
+        "cnaps_reminder_4h_label": _cnaps_expiration_label(reminder_4h_dt),
+        "cnaps_reminder_2h_label": _cnaps_expiration_label(reminder_2h_dt),
         "cnaps_is_expired": remaining.total_seconds() <= 0,
         "cnaps_remaining": remaining,
     }

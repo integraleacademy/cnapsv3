@@ -319,6 +319,8 @@
             <div class="cnaps-expired-badge">Lien CNAPS expiré</div>
           {% elif espace == 'Créé' and r.cnaps_expiration_label %}
             <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
+            <div class="cnaps-expiration">Rappel 1 (4h avant) prévu le {{ r.cnaps_reminder_4h_label }}</div>
+            <div class="cnaps-expiration">Rappel 2 (2h avant) prévu le {{ r.cnaps_reminder_2h_label }}</div>
           {% endif %}
           {% set cnaps = (r.statut_cnaps or '')|trim %}
           {% set cnaps_empty = (cnaps == '' or cnaps == '--') %}
