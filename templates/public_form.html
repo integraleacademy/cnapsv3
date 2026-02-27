@@ -136,6 +136,65 @@
     .upload-status { margin: 6px 0 14px; font-size: 13px; color: #1f4db7; font-weight: 600; }
     .upload-status ul { margin: 4px 0 0 18px; padding: 0; color: #33415f; font-weight: 500; }
 
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 28, 72, 0.48);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.visible { display: flex; }
+
+    .modal {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid #e9ecff;
+      box-shadow: 0 26px 60px rgba(17, 35, 99, 0.24);
+      padding: 24px;
+    }
+
+    .modal h3 {
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+      color: #1b2a5d;
+    }
+
+    .modal p {
+      margin: 0;
+      color: #4f5f84;
+      line-height: 1.45;
+    }
+
+    .modal-footer {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .modal-btn {
+      width: auto;
+      min-width: 108px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 2px solid #b36b00;
+      background: linear-gradient(180deg, #bf7b0f 0%, #8f5600 100%);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 5px 10px rgba(143, 86, 0, 0.28);
+    }
+
+    .modal-btn:focus-visible {
+      outline: 3px solid rgba(56, 88, 233, 0.35);
+      outline-offset: 2px;
+    }
+
     @media (max-width: 768px) {
       .wrap { padding: 18px; border-radius: 16px; }
       .grid { grid-template-columns: 1fr; }
@@ -222,10 +281,45 @@
       </div>
     </form>
   </div>
+
+  <div id="file-alert-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="file-alert-title" aria-describedby="file-alert-message">
+    <div class="modal">
+      <h3 id="file-alert-title">Document trop volumineux</h3>
+      <p id="file-alert-message"></p>
+      <div class="modal-footer">
+        <button type="button" id="file-alert-close" class="modal-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const heberge=document.getElementById('heberge'), hb=document.getElementById('heberge_bloc');
     const nonFr=document.getElementById('non_francais'), nb=document.getElementById('non_francais_bloc');
     const birthDateInput = document.getElementById('date_naissance');
+    const fileAlertModal = document.getElementById('file-alert-modal');
+    const fileAlertMessage = document.getElementById('file-alert-message');
+    const fileAlertClose = document.getElementById('file-alert-close');
+
+    function showFileAlert(message) {
+      fileAlertMessage.textContent = message;
+      fileAlertModal.classList.add('visible');
+      fileAlertClose.focus();
+    }
+
+    function closeFileAlert() {
+      fileAlertModal.classList.remove('visible');
+    }
+
+    fileAlertClose.addEventListener('click', closeFileAlert);
+    fileAlertModal.addEventListener('click', function (event) {
+      if (event.target === fileAlertModal) closeFileAlert();
+    });
+
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape' && fileAlertModal.classList.contains('visible')) {
+        closeFileAlert();
+      }
+    });
 
     function formatBirthDate(value) {
       const digits = (value || '').replace(/\D/g, '').slice(0, 8);
@@ -282,7 +376,7 @@
 
         if (tooLargeFiles.length) {
           const names = tooLargeFiles.map(file => file.name).join(', ');
-          alert(`Le document ${names} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.`);
+          showFileAlert(`Le document ${names} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.`);
           files = files.filter(file => file.size <= 5 * 1024 * 1024);
         }
 
