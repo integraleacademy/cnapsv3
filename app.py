@@ -758,7 +758,11 @@ def data_json():
 
         payload = {
             "instruction": instruction_count,
+            # Compatibilité descendante: certaines intégrations lisent encore
+            # "a_traiter" / "demandes_a_faire" au lieu de "demande_a_faire".
+            "a_traiter": demande_a_faire_count,
             "demande_a_faire": demande_a_faire_count,
+            "demandes_a_faire": demande_a_faire_count,
             "documents_a_controler": documents_a_controler_count,
             "dossiers_documents_a_controler": dossiers_documents_a_controler_count,
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer_count,
@@ -775,7 +779,9 @@ def data_json():
         print("⚠️ Erreur data.json:", e)
         return {
             "instruction": 0,
+            "a_traiter": 0,
             "demande_a_faire": 0,
+            "demandes_a_faire": 0,
             "documents_a_controler": 0,
             "dossiers_documents_a_controler": 0,
             "comptes_cnaps_a_creer": 0,
