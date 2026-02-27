@@ -732,24 +732,6 @@ def data_json():
                     )
                 )
             """
-            statut_cnaps_normalized_expr = """
-                LOWER(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                TRIM(COALESCE(d.statut_cnaps, '')),
-                                char(160),
-                                ''
-                            ),
-                            ' ',
-                            ''
-                        ),
-                        '-',
-                        ''
-                    )
-                )
-            """
-
             instruction_count, err = _safe_count(
                 conn,
                 "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
@@ -757,18 +739,11 @@ def data_json():
             if err:
                 errors.append(f"instruction: {err}")
 
-            demande_a_faire_count, err = _safe_count(
-                conn,
-                f"""
-                SELECT COUNT(*)
-                FROM public_requests pr
-                LEFT JOIN dossiers d ON d.id = pr.dossier_id
-                WHERE {espace_cnaps_normalized_expr} = 'valide'
-                  AND {statut_cnaps_normalized_expr} = ''
-                """,
-            )
-            if err:
-                errors.append(f"demande_a_faire: {err}")
+            try:
+                demande_a_faire_count, _ = _compute_demandes_a_faire(conn, debug=False)
+            except sqlite3.OperationalError as exc:
+                demande_a_faire_count = 0
+                errors.append(f"demande_a_faire: {exc}")
 
             documents_a_controler_count, err = _safe_count(
                 conn,
@@ -888,34 +863,8 @@ def summary_json():
                     )
                 )
             """
-            statut_cnaps_normalized_expr = """
-                LOWER(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                TRIM(COALESCE(d.statut_cnaps, '')),
-                                char(160),
-                                ''
-                            ),
-                            ' ',
-                            ''
-                        ),
-                        '-',
-                        ''
-                    )
-                )
-            """
-
-            demandes_a_faire = _safe_count(
-                conn,
-                f"""
-                SELECT COUNT(*)
-                FROM public_requests pr
-                LEFT JOIN dossiers d ON d.id = pr.dossier_id
-                WHERE {espace_cnaps_normalized_expr} = 'valide'
-                  AND {statut_cnaps_normalized_expr} = ''
-                """,
-            )
+            debug_summary = (request.args.get("debug") or "").strip().lower() in {"1", "true", "yes"}
+            demandes_a_faire, demandes_debug = _compute_demandes_a_faire(conn, debug=debug_summary)
 
             documents_a_controler = _safe_count(
                 conn,
@@ -941,12 +890,16 @@ def summary_json():
                 "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
             )
 
-        return {
+        payload = {
             "demandes_a_faire": demandes_a_faire,
             "documents_a_controler": documents_a_controler,
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
             "instruction": instruction,
-        }, 200, headers
+        }
+        if debug_summary:
+            payload["debug_demandes_a_faire"] = demandes_debug
+
+        return payload, 200, headers
     except Exception:
         return {
             "demandes_a_faire": 0,
@@ -1045,6 +998,145 @@ def _normalize(txt: str) -> str:
         if unicodedata.category(c) != "Mn"
     ).lower()
     return "".join(c for c in normalized if c.isalnum())
+
+
+def _normalize_action_value(value) -> str:
+    """Normalise une action CNAPS pour comparaison robuste."""
+    if value is None:
+        return ""
+
+    txt = str(value).strip().lower()
+    txt = "".join(
+        c for c in unicodedata.normalize("NFD", txt)
+        if unicodedata.category(c) != "Mn"
+    )
+    compact = txt.replace("_", " ").replace("-", " ")
+    compact = " ".join(compact.split())
+    compact_alnum = "".join(c for c in compact if c.isalnum())
+
+    if compact in {"demande a faire", "a faire"}:
+        return "demande_a_faire"
+    if compact_alnum in {"demandeafaire", "demandesafaire", "afaire"}:
+        return "demande_a_faire"
+    return compact
+
+
+def _table_columns(conn, table_name: str):
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})")}
+
+
+def _build_first_non_empty_expr(alias: str, columns, candidates):
+    parts = []
+    for field in candidates:
+        if field in columns:
+            parts.append(f"NULLIF(TRIM(COALESCE({alias}.{field}, '')), '')")
+    if not parts:
+        return "''"
+    return f"COALESCE({', '.join(parts)}, '')"
+
+
+def _compute_demandes_a_faire(conn, debug: bool = False):
+    """Compte les demandes à faire via plusieurs champs d'action possibles."""
+    pr_columns = _table_columns(conn, "public_requests")
+    d_columns = _table_columns(conn, "dossiers")
+
+    action_candidates = [
+        ("pr", "action_cnaps"),
+        ("pr", "cnaps_action"),
+        ("pr", "espace_cnaps_action"),
+        ("pr", "action_espace_cnaps"),
+        ("pr", "statut_action"),
+        ("pr", "action"),
+        ("d", "action_cnaps"),
+        ("d", "cnaps_action"),
+        ("d", "espace_cnaps_action"),
+        ("d", "action_espace_cnaps"),
+        ("d", "statut_action"),
+        ("d", "action"),
+    ]
+
+    selected_action_fields = []
+    for alias, field in action_candidates:
+        if alias == "pr" and field in pr_columns:
+            selected_action_fields.append((alias, field))
+        elif alias == "d" and field in d_columns:
+            selected_action_fields.append((alias, field))
+
+    action_expr_parts = [
+        f"NULLIF(TRIM(COALESCE({alias}.{field}, '')), '')"
+        for alias, field in selected_action_fields
+    ]
+    action_expr = f"COALESCE({', '.join(action_expr_parts)}, '')" if action_expr_parts else "''"
+
+    espace_expr = _build_first_non_empty_expr(
+        "pr",
+        pr_columns,
+        ["espace_cnaps", "cnaps_espace", "espace_cnaps_statut", "statut_espace_cnaps"],
+    )
+    statut_expr = _build_first_non_empty_expr(
+        "d",
+        d_columns,
+        ["statut_cnaps", "cnaps_statut", "statut"],
+    )
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            pr.id AS request_id,
+            pr.dossier_id AS dossier_id,
+            {espace_expr} AS espace_cnaps_value,
+            {statut_expr} AS statut_cnaps_value,
+            {action_expr} AS action_value
+        FROM public_requests pr
+        LEFT JOIN dossiers d ON d.id = pr.dossier_id
+        """
+    ).fetchall()
+
+    count = 0
+    counted_example = None
+    ignored_example = None
+
+    for row in rows:
+        action_normalized = _normalize_action_value(row["action_value"])
+        espace_normalized = _normalize_action_value(row["espace_cnaps_value"])
+        statut_normalized = _normalize_action_value(row["statut_cnaps_value"])
+        statut_empty = statut_normalized in {"", "--"}
+
+        is_demande = action_normalized == "demande_a_faire"
+        fallback_demande = espace_normalized == "valide" and statut_empty
+        matched = is_demande or fallback_demande
+
+        if matched:
+            count += 1
+            if counted_example is None:
+                counted_example = {
+                    "request_id": row["request_id"],
+                    "dossier_id": row["dossier_id"],
+                    "action_value": row["action_value"],
+                    "action_normalized": action_normalized,
+                    "espace_cnaps_value": row["espace_cnaps_value"],
+                    "statut_cnaps_value": row["statut_cnaps_value"],
+                }
+        elif ignored_example is None:
+            ignored_example = {
+                "request_id": row["request_id"],
+                "dossier_id": row["dossier_id"],
+                "action_value": row["action_value"],
+                "action_normalized": action_normalized,
+                "espace_cnaps_value": row["espace_cnaps_value"],
+                "statut_cnaps_value": row["statut_cnaps_value"],
+            }
+
+    debug_payload = None
+    if debug:
+        debug_payload = {
+            "selected_action_fields": [f"{alias}.{field}" for alias, field in selected_action_fields],
+            "counted_example": counted_example,
+            "ignored_example": ignored_example,
+        }
+        app.logger.info("summary demandes_a_faire debug=%s", debug_payload)
+
+    return count, debug_payload
 
 
 @app.route("/lookup_cnaps.json")
