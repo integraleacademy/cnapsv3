@@ -524,15 +524,18 @@ document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
 
 document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => {
   let timeoutId;
-  let lastSaved = input.value;
+  let lastSaved = (input.value || '').trim();
 
-  const save = () => {
+  const hasEnoughDigits = (value) => {
+    const digits = (value || '').replace(/\D/g, '');
+    return digits.length >= 9;
+  };
+
+  const save = ({ showAlertOnError = true } = {}) => {
     const rid = input.dataset.requestId;
     if (!rid) return;
 
-    const rawValue = input.value;
-    const value = rawValue.trim();
-
+    const value = (input.value || '').trim();
     if (value === lastSaved) return;
 
     fetch(`/a-traiter/${rid}/telephone`, {
@@ -548,17 +551,23 @@ document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => 
       lastSaved = value;
       input.value = value;
     }).catch((error) => {
-      window.alert(error.message || 'Impossible de sauvegarder le téléphone');
+      if (showAlertOnError) {
+        window.alert(error.message || 'Impossible de sauvegarder le téléphone');
+      }
       input.value = lastSaved;
     });
   };
 
   input.addEventListener('input', () => {
     clearTimeout(timeoutId);
-    timeoutId = setTimeout(save, 350);
+    const value = (input.value || '').trim();
+    if (value && !hasEnoughDigits(value)) {
+      return;
+    }
+    timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
   });
 
-  input.addEventListener('blur', save);
+  input.addEventListener('blur', () => save({ showAlertOnError: true }));
 });
 
 document.querySelectorAll('.dracar-link').forEach(link => {
