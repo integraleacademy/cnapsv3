@@ -186,6 +186,21 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_4h_sent_at TEXT")
         if "cnaps_reminder_2h_sent_at" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_2h_sent_at TEXT")
+        if "telephone" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN telephone TEXT")
+
+        if _table_has_column(conn, "dossiers", "telephone"):
+            conn.execute(
+                """
+                UPDATE public_requests
+                SET telephone = (
+                    SELECT d.telephone
+                    FROM dossiers d
+                    WHERE d.id = public_requests.dossier_id
+                )
+                WHERE (telephone IS NULL OR TRIM(telephone) = '')
+                """
+            )
 
         missing_tokens = conn.execute(
             "SELECT id FROM public_requests WHERE espace_cnaps_validation_token IS NULL OR espace_cnaps_validation_token = ''"
@@ -270,6 +285,19 @@ def _get_statuts_dates(conn, dossier_id):
 def _table_has_column(conn, table_name, column_name):
     columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
     return column_name in columns
+
+
+def _request_phone_select_expr(conn):
+    has_public_request_phone = _table_has_column(conn, "public_requests", "telephone")
+    has_dossier_phone = _table_has_column(conn, "dossiers", "telephone")
+
+    if has_public_request_phone and has_dossier_phone:
+        return "COALESCE(NULLIF(pr.telephone, ''), NULLIF(d.telephone, ''))"
+    if has_public_request_phone:
+        return "NULLIF(pr.telephone, '')"
+    if has_dossier_phone:
+        return "NULLIF(d.telephone, '')"
+    return "NULL"
 
 
 def _new_validation_token():
@@ -1110,10 +1138,10 @@ def public_form():
 
         cur = conn.execute(
             """
-            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, espace_cnaps_validation_token)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO public_requests (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, telephone, espace_cnaps_validation_token)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, _new_validation_token()),
+            (dossier_id, nom, prenom, email, date_naissance, heberge, non_francais, telephone, _new_validation_token()),
         )
         request_id = cur.lastrowid
 
@@ -1148,7 +1176,7 @@ def public_form():
 def a_traiter():
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
+        telephone_expr = _request_phone_select_expr(conn)
         rows = conn.execute(
             f"""
             SELECT
@@ -1207,7 +1235,7 @@ def update_espace_cnaps(request_id):
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
+        telephone_expr = _request_phone_select_expr(conn)
         req = conn.execute(
             f"""
             SELECT pr.*, {telephone_expr} AS telephone
@@ -1453,7 +1481,7 @@ def review_documents(request_id):
 def notify_non_conformities(request_id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        telephone_expr = "d.telephone" if _table_has_column(conn, "dossiers", "telephone") else "NULL"
+        telephone_expr = _request_phone_select_expr(conn)
         req = conn.execute(
             f"""
             SELECT pr.*, {telephone_expr} AS telephone
