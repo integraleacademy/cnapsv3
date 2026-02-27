@@ -714,7 +714,11 @@ def data_json():
                 SELECT COUNT(*)
                 FROM public_requests pr
                 LEFT JOIN dossiers d ON d.id = pr.dossier_id
-                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'valide'
+                WHERE LOWER(
+                        TRIM(
+                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
+                        )
+                    ) LIKE 'valid%'
                   AND TRIM(COALESCE(d.statut_cnaps, '')) IN ('', '--')
                 """,
             )
@@ -750,7 +754,11 @@ def data_json():
                 """
                 SELECT COUNT(*)
                 FROM public_requests pr
-                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'a creer'
+                WHERE LOWER(
+                        TRIM(
+                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
+                        )
+                    ) LIKE 'a cre%'
                 """,
             )
             if err:
