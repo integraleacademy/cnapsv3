@@ -207,8 +207,9 @@
   {% set demande_ns = namespace(total=0) %}
   {% for item in requests %}
     {% set item_espace = item.espace_cnaps or 'A créer' %}
-    {% set item_cnaps = item.statut_cnaps or '' %}
-    {% if item_espace == 'Validé' and item_cnaps == '' %}
+    {% set item_cnaps = (item.statut_cnaps or '')|trim %}
+    {% set item_cnaps_empty = (item_cnaps == '' or item_cnaps == '--') %}
+    {% if item_espace == 'Validé' and item_cnaps_empty %}
       {% set demande_ns.total = demande_ns.total + 1 %}
     {% endif %}
   {% endfor %}
@@ -303,12 +304,13 @@
           {% elif espace == 'Créé' and r.cnaps_expiration_label %}
             <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
           {% endif %}
-          {% set cnaps = r.statut_cnaps or '' %}
+          {% set cnaps = (r.statut_cnaps or '')|trim %}
+          {% set cnaps_empty = (cnaps == '' or cnaps == '--') %}
           <button
             type="button"
             class="btn demande-a-faire-row"
             data-demande-a-faire
-            {% if not (espace == 'Validé' and cnaps == '') %}hidden{% endif %}
+            {% if not (espace == 'Validé' and cnaps_empty) %}hidden{% endif %}
           >
             Demande à faire
           </button>
@@ -395,11 +397,25 @@ function applyCnapsClass(select){
   select.classList.add(map[value] || 'statut-default');
 }
 
+function normalizeValue(value){
+  return (value || '')
+    .toString()
+    .trim()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+}
+
 function shouldShowDemande(row){
   const espaceSelect = row.querySelector("select[name='espace_cnaps']");
   const statutSelect = row.querySelector("select[name='statut_cnaps']");
   if (!espaceSelect || !statutSelect) return false;
-  return espaceSelect.value === 'Validé' && statutSelect.value === '';
+
+  const espaceValue = normalizeValue(espaceSelect.value);
+  const statutValue = (statutSelect.value || '').toString().trim();
+  const isStatutEmpty = statutValue === '' || statutValue === '--';
+
+  return espaceValue === 'valide' && isStatutEmpty;
 }
 
 function refreshDemandeIndicators(){
