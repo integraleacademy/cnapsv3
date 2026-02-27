@@ -1010,7 +1010,6 @@ def _send_sms(to_phone: str, message: str):
 def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation_url: str):
     safe_prenom = (prenom or "").strip() or ""
     safe_formation = (formation_name or "").strip() or "votre formation"
-    safe_validation_url = (validation_url or "").strip()
     return (
         "⚠️ Formation sécurité — Intégrale Academy\n"
         "INFO IMPORTANTE\n\n"
@@ -1021,8 +1020,6 @@ def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation
         "3) Cette validation finalise la création de votre compte CNAPS.\n\n"
         "⏳ Attention : le lien expire dans moins de 12 heures.\n"
         "Passé ce délai, nous devrons recommencer toute la procédure.\n\n"
-        "✅ Une fois votre compte CNAPS validé, confirmez-le ici :\n"
-        f"{safe_validation_url}\n\n"
         "Merci,\n"
         "Intégrale Academy"
     )
