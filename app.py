@@ -53,6 +53,7 @@ BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "").strip()
 BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "").strip() or "Intégrale Academy"
 BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
+ALLOW_SMS_MOCK = os.getenv("ALLOW_SMS_MOCK", "0").strip() == "1"
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
 PUBLIC_APP_BASE_URL = os.getenv("PUBLIC_APP_BASE_URL", "https://cnapsv3.onrender.com").rstrip("/")
@@ -823,7 +824,7 @@ def _send_email_html(to_email: str, subject: str, html: str):
 
 def _send_sms(to_phone: str, message: str):
     if not to_phone:
-        return
+        raise RuntimeError("Numéro de téléphone manquant pour l'envoi SMS")
 
     normalized_phone = _normalize_phone_number(to_phone)
     if not normalized_phone:
@@ -853,9 +854,15 @@ def _send_sms(to_phone: str, message: str):
                 pass
             return
 
-        print(f"[SMS MOCK] to={normalized_phone}")
-        print(message)
-        return
+        if ALLOW_SMS_MOCK:
+            print(f"[SMS MOCK] to={normalized_phone}")
+            print(message)
+            return
+
+        raise RuntimeError(
+            "Configuration SMS incomplète: renseigner SMS_WEBHOOK_URL "
+            "ou le couple BREVO_API_KEY + BREVO_SMS_SENDER"
+        )
 
     payload = json.dumps({"to": normalized_phone, "message": message}).encode("utf-8")
     req = urllib_request.Request(
@@ -1272,7 +1279,11 @@ def update_espace_cnaps(request_id):
         try:
             _send_sms(req["telephone"], sms)
         except Exception:
-            app.logger.exception("Échec envoi SMS espace CNAPS request_id=%s", request_id)
+            app.logger.exception(
+                "Échec envoi SMS espace CNAPS request_id=%s telephone=%r",
+                request_id,
+                req["telephone"],
+            )
 
     return ("", 204)
 
