@@ -714,7 +714,11 @@ def data_json():
                 SELECT COUNT(*)
                 FROM public_requests pr
                 LEFT JOIN dossiers d ON d.id = pr.dossier_id
-                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'valide'
+                WHERE LOWER(
+                        TRIM(
+                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
+                        )
+                    ) LIKE 'valid%'
                   AND TRIM(COALESCE(d.statut_cnaps, '')) IN ('', '--')
                 """,
             )
@@ -750,7 +754,11 @@ def data_json():
                 """
                 SELECT COUNT(*)
                 FROM public_requests pr
-                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'a creer'
+                WHERE LOWER(
+                        TRIM(
+                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
+                        )
+                    ) LIKE 'a cre%'
                 """,
             )
             if err:
@@ -758,7 +766,11 @@ def data_json():
 
         payload = {
             "instruction": instruction_count,
+            # Compatibilité descendante: certaines intégrations lisent encore
+            # "a_traiter" / "demandes_a_faire" au lieu de "demande_a_faire".
+            "a_traiter": demande_a_faire_count,
             "demande_a_faire": demande_a_faire_count,
+            "demandes_a_faire": demande_a_faire_count,
             "documents_a_controler": documents_a_controler_count,
             "dossiers_documents_a_controler": dossiers_documents_a_controler_count,
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer_count,
@@ -775,7 +787,9 @@ def data_json():
         print("⚠️ Erreur data.json:", e)
         return {
             "instruction": 0,
+            "a_traiter": 0,
             "demande_a_faire": 0,
+            "demandes_a_faire": 0,
             "documents_a_controler": 0,
             "dossiers_documents_a_controler": 0,
             "comptes_cnaps_a_creer": 0,
