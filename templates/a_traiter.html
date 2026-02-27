@@ -340,19 +340,23 @@
             <option value="Créé" {% if espace == 'Créé' %}selected{% endif %}>Créé</option>
             <option value="Validé" {% if espace == 'Validé' %}selected{% endif %}>Validé</option>
           </select>
-          {% if espace == 'Créé' and r.cnaps_is_expired %}
-            <div class="cnaps-expired-badge">Lien CNAPS expiré</div>
-          {% elif espace == 'Créé' and r.cnaps_expiration_label %}
-            <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
-            <div class="cnaps-expiration">
-              Rappel 1 (4h avant) prévu le {{ r.cnaps_reminder_4h_label }}
-              <button type="button" class="cnaps-reminder-action" data-reminder-trigger data-request-id="{{ r.id }}" data-reminder-kind="4h">Envoyer maintenant</button>
-              <div class="cnaps-reminder-sent" data-reminder-sent="4h">{% if r.cnaps_reminder_4h_sent_at %}Rappel envoyé le {{ r.cnaps_reminder_4h_sent_at[:10].split('-')|reverse|join('/') }} à {{ r.cnaps_reminder_4h_sent_at[11:16].replace(':', 'h') }}{% endif %}</div>
-            </div>
-            <div class="cnaps-expiration">
-              Rappel 2 (2h avant) prévu le {{ r.cnaps_reminder_2h_label }}
-              <button type="button" class="cnaps-reminder-action" data-reminder-trigger data-request-id="{{ r.id }}" data-reminder-kind="2h">Envoyer maintenant</button>
-              <div class="cnaps-reminder-sent" data-reminder-sent="2h">{% if r.cnaps_reminder_2h_sent_at %}Rappel envoyé le {{ r.cnaps_reminder_2h_sent_at[:10].split('-')|reverse|join('/') }} à {{ r.cnaps_reminder_2h_sent_at[11:16].replace(':', 'h') }}{% endif %}</div>
+          {% if espace == 'Créé' and (r.cnaps_is_expired or r.cnaps_expiration_label) %}
+            <div data-cnaps-created-info>
+              {% if r.cnaps_is_expired %}
+                <div class="cnaps-expired-badge">Lien CNAPS expiré</div>
+              {% elif r.cnaps_expiration_label %}
+                <div class="cnaps-expiration">Lien CNAPS expire le {{ r.cnaps_expiration_label }}</div>
+                <div class="cnaps-expiration">
+                  Rappel 1 (4h avant) prévu le {{ r.cnaps_reminder_4h_label }}
+                  <button type="button" class="cnaps-reminder-action" data-reminder-trigger data-request-id="{{ r.id }}" data-reminder-kind="4h">Envoyer maintenant</button>
+                  <div class="cnaps-reminder-sent" data-reminder-sent="4h">{% if r.cnaps_reminder_4h_sent_at %}Rappel envoyé le {{ r.cnaps_reminder_4h_sent_at[:10].split('-')|reverse|join('/') }} à {{ r.cnaps_reminder_4h_sent_at[11:16].replace(':', 'h') }}{% endif %}</div>
+                </div>
+                <div class="cnaps-expiration">
+                  Rappel 2 (2h avant) prévu le {{ r.cnaps_reminder_2h_label }}
+                  <button type="button" class="cnaps-reminder-action" data-reminder-trigger data-request-id="{{ r.id }}" data-reminder-kind="2h">Envoyer maintenant</button>
+                  <div class="cnaps-reminder-sent" data-reminder-sent="2h">{% if r.cnaps_reminder_2h_sent_at %}Rappel envoyé le {{ r.cnaps_reminder_2h_sent_at[:10].split('-')|reverse|join('/') }} à {{ r.cnaps_reminder_2h_sent_at[11:16].replace(':', 'h') }}{% endif %}</div>
+                </div>
+              {% endif %}
             </div>
           {% endif %}
           {% set cnaps = (r.statut_cnaps or '')|trim %}
@@ -489,6 +493,15 @@ function refreshDemandeIndicators(){
   summaryButton.classList.add(count === 0 ? 'zero' : 'pending');
 }
 
+function refreshCnapsCreatedInfo(row){
+  const espaceSelect = row.querySelector("select[name='espace_cnaps']");
+  const createdInfo = row.querySelector('[data-cnaps-created-info]');
+  if (!espaceSelect || !createdInfo) return;
+
+  const isCreated = normalizeValue(espaceSelect.value) === 'cree';
+  createdInfo.style.display = isCreated ? '' : 'none';
+}
+
 function applyEspaceClass(select){
   const value = select.value;
   const map = {
@@ -547,9 +560,11 @@ document.querySelectorAll("select[name='espace_cnaps']").forEach(select => {
   applyEspaceClass(select);
   select.dataset.syncRunning = '0';
   select.dataset.syncQueuedValue = '';
+  refreshCnapsCreatedInfo(select.closest('tr'));
 
   select.addEventListener('change', () => {
     select.dataset.syncQueuedValue = select.value;
+    refreshCnapsCreatedInfo(select.closest('tr'));
     syncEspaceStatus(select);
   });
 });
