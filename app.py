@@ -868,6 +868,26 @@ def _send_sms(to_phone: str, message: str):
         pass
 
 
+def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation_url: str):
+    safe_prenom = (prenom or "").strip() or ""
+    safe_formation = (formation_name or "").strip() or "votre formation"
+    safe_validation_url = (validation_url or "").strip()
+    return (
+        "⚠️Formation sécurité Intégrale Academy - INFO IMPORTANTE ⚠️\n"
+        f"Bonjour {safe_prenom},\n"
+        f"Je reviens vers vous concernant la formation {safe_formation}. "
+        "Vous avez du recevoir un mail de la part du CNAPS (Ministère de l'intérieur). "
+        "Vous devez simplement valider votre adresse e-mail pour finaliser la création de votre "
+        "compte en cliquant sur le lien dans le mail que vous avez reçu.\n\n"
+        "⏳ Attention le lien expire dans moins de 12 heures. Au delà de ce délai nous devrons "
+        "recommencer toute la procédure.\n\n"
+        "Une fois votre compte CNAPS validé, cliquez ici pour nous informer : "
+        f"{safe_validation_url}\n\n"
+        "Merci par avance,\n\n"
+        "Intégrale Academy"
+    )
+
+
 def _normalize_phone_number(phone: str):
     digits = "".join(ch for ch in (phone or "") if ch.isdigit())
     if not digits:
@@ -1246,11 +1266,8 @@ def update_espace_cnaps(request_id):
                 request_id,
             )
 
-        sms = (
-            f"Bonjour {req['prenom']}, votre Espace Particulier CNAPS pour la formation {formation_name} "
-            "vient d'être créé. Merci de valider votre compte via le lien reçu du CNAPS. "
-            "Le lien expire sous 12h."
-        )
+        validation_url = f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}"
+        sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
         try:
             _send_sms(req["telephone"], sms)
         except Exception:
