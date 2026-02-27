@@ -686,21 +686,67 @@ def logout():
 # ------------------------------------------------------------
 @app.route("/data.json")
 def data_json():
-    """Retourne le nombre de dossiers en instruction pour le suivi CNAPS"""
+    """Retourne les compteurs du suivi CNAPS pour la plateforme de gestion."""
     try:
         with sqlite3.connect(DB_NAME) as conn:
-            cur = conn.execute("SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'")
-            count = cur.fetchone()[0]
+            instruction_count = conn.execute(
+                "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'"
+            ).fetchone()[0]
+
+            demande_a_faire_count = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM public_requests pr
+                LEFT JOIN dossiers d ON d.id = pr.dossier_id
+                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'valide'
+                  AND TRIM(COALESCE(d.statut_cnaps, '')) IN ('', '--')
+                """
+            ).fetchone()[0]
+
+            documents_a_controler_count = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM request_documents rd
+                JOIN public_requests pr ON pr.id = rd.request_id
+                WHERE rd.is_active = 1
+                  AND rd.is_conforme IS NULL
+                """
+            ).fetchone()[0]
+
+            dossiers_documents_a_controler_count = conn.execute(
+                """
+                SELECT COUNT(DISTINCT rd.request_id)
+                FROM request_documents rd
+                JOIN public_requests pr ON pr.id = rd.request_id
+                WHERE rd.is_active = 1
+                  AND rd.is_conforme IS NULL
+                """
+            ).fetchone()[0]
 
         headers = {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
         }
-        return {"instruction": count}, 200, headers
+        return {
+            "instruction": instruction_count,
+            "demande_a_faire": demande_a_faire_count,
+            "documents_a_controler": documents_a_controler_count,
+            "dossiers_documents_a_controler": dossiers_documents_a_controler_count,
+            "has_demande_a_faire": demande_a_faire_count > 0,
+            "has_documents_a_controler": documents_a_controler_count > 0,
+        }, 200, headers
 
     except Exception as e:
         print("⚠️ Erreur data.json:", e)
-        return {"instruction": -1, "error": str(e)}, 500, {
+        return {
+            "instruction": -1,
+            "demande_a_faire": -1,
+            "documents_a_controler": -1,
+            "dossiers_documents_a_controler": -1,
+            "has_demande_a_faire": False,
+            "has_documents_a_controler": False,
+            "error": str(e),
+        }, 500, {
             "Access-Control-Allow-Origin": "*"
         }
 
