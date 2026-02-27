@@ -890,8 +890,14 @@ def _send_sms(to_phone: str, message: str):
                 method="POST",
             )
             try:
-                with urllib_request.urlopen(req, timeout=10):
-                    pass
+                with urllib_request.urlopen(req, timeout=10) as resp:
+                    response_body = resp.read().decode("utf-8", errors="replace")
+                app.logger.info(
+                    "SMS Brevo accepté phone=%s sender=%r response=%s",
+                    normalized_phone,
+                    BREVO_SMS_SENDER,
+                    response_body,
+                )
             except HTTPError as exc:
                 error_body = ""
                 if exc.fp is not None:
@@ -923,8 +929,14 @@ def _send_sms(to_phone: str, message: str):
         method="POST",
     )
     try:
-        with urllib_request.urlopen(req, timeout=10):
-            pass
+        with urllib_request.urlopen(req, timeout=10) as resp:
+            response_body = resp.read().decode("utf-8", errors="replace")
+        app.logger.info(
+            "SMS webhook accepté phone=%s url=%r response=%s",
+            normalized_phone,
+            SMS_WEBHOOK_URL,
+            response_body,
+        )
     except HTTPError as exc:
         error_body = ""
         if exc.fp is not None:
@@ -1284,6 +1296,12 @@ def update_espace_cnaps(request_id):
             return jsonify({"ok": False, "error": "Demande introuvable"}), 404
 
         old_status = req["espace_cnaps"] or "A créer"
+        app.logger.warning(
+            "Transition espace CNAPS request_id=%s old=%r new=%r",
+            request_id,
+            old_status,
+            nouvel_etat,
+        )
         token = (req["espace_cnaps_validation_token"] or "").strip() if "espace_cnaps_validation_token" in req.keys() else ""
         if not token:
             token = _new_validation_token()
@@ -1351,6 +1369,13 @@ def update_espace_cnaps(request_id):
                 req["telephone"],
                 exc,
             )
+    else:
+        app.logger.warning(
+            "SMS non declenche pour request_id=%s (condition old!=Créé && new==Créé non satisfaite) old=%r new=%r",
+            request_id,
+            old_status,
+            nouvel_etat,
+        )
 
     return ("", 204)
 
