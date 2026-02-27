@@ -138,6 +138,10 @@
       animation: pulse 1.2s infinite;
     }
 
+    .demande-hidden {
+      display: none !important;
+    }
+
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); }
       100% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
@@ -206,7 +210,7 @@
 <div class="wrap">
   {% set demande_ns = namespace(total=0) %}
   {% for item in requests %}
-    {% set item_espace = item.espace_cnaps or 'A créer' %}
+    {% set item_espace = (item.espace_cnaps or 'A créer')|trim %}
     {% set item_cnaps = (item.statut_cnaps or '')|trim %}
     {% set item_cnaps_empty = (item_cnaps == '' or item_cnaps == '--') %}
     {% if item_espace == 'Validé' and item_cnaps_empty %}
@@ -293,7 +297,7 @@
           </div>
         </td>
         <td>
-          {% set espace = r.espace_cnaps or 'A créer' %}
+          {% set espace = (r.espace_cnaps or 'A créer')|trim %}
           <select name="espace_cnaps" data-request-id="{{ r.id }}" class="cnaps-select {% if espace == 'A créer' %}espace-a-creer{% elif espace == 'Créé' %}espace-cree{% elif espace == 'Validé' %}espace-valide{% else %}espace-a-creer{% endif %}">
             <option value="A créer" {% if espace == 'A créer' %}selected{% endif %}>A créer</option>
             <option value="Créé" {% if espace == 'Créé' %}selected{% endif %}>Créé</option>
@@ -308,9 +312,8 @@
           {% set cnaps_empty = (cnaps == '' or cnaps == '--') %}
           <button
             type="button"
-            class="btn demande-a-faire-row"
+            class="btn demande-a-faire-row {% if not (espace == 'Validé' and cnaps_empty) %}demande-hidden{% endif %}"
             data-demande-a-faire
-            {% if not (espace == 'Validé' and cnaps_empty) %}hidden{% endif %}
           >
             Demande à faire
           </button>
@@ -427,7 +430,7 @@ function refreshDemandeIndicators(){
     if (!rowButton) return;
 
     const visible = shouldShowDemande(row);
-    rowButton.hidden = !visible;
+    rowButton.classList.toggle('demande-hidden', !visible);
     if (visible) count += 1;
   });
 
