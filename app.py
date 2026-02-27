@@ -889,8 +889,20 @@ def _send_sms(to_phone: str, message: str):
                 },
                 method="POST",
             )
-            with urllib_request.urlopen(req, timeout=10):
-                pass
+            try:
+                with urllib_request.urlopen(req, timeout=10):
+                    pass
+            except HTTPError as exc:
+                error_body = ""
+                if exc.fp is not None:
+                    error_body = exc.fp.read().decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"Brevo SMS rejected request status={exc.code} phone={normalized_phone} sender={BREVO_SMS_SENDER!r} response={error_body}"
+                ) from exc
+            except URLError as exc:
+                raise RuntimeError(
+                    f"Brevo SMS request failed phone={normalized_phone} sender={BREVO_SMS_SENDER!r} reason={exc.reason}"
+                ) from exc
             return
 
         if ALLOW_SMS_MOCK:
@@ -910,8 +922,20 @@ def _send_sms(to_phone: str, message: str):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib_request.urlopen(req, timeout=10):
-        pass
+    try:
+        with urllib_request.urlopen(req, timeout=10):
+            pass
+    except HTTPError as exc:
+        error_body = ""
+        if exc.fp is not None:
+            error_body = exc.fp.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"SMS webhook rejected request status={exc.code} phone={normalized_phone} url={SMS_WEBHOOK_URL!r} response={error_body}"
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"SMS webhook request failed phone={normalized_phone} url={SMS_WEBHOOK_URL!r} reason={exc.reason}"
+        ) from exc
 
 
 def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation_url: str):
@@ -933,7 +957,6 @@ def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation
         "Merci,\n"
         "Intégrale Academy"
     )
-
 
 def _normalize_phone_number(phone: str):
     digits = "".join(ch for ch in (phone or "") if ch.isdigit())
@@ -1321,11 +1344,12 @@ def update_espace_cnaps(request_id):
         sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
         try:
             _send_sms(req["telephone"], sms)
-        except Exception:
+        except Exception as exc:
             app.logger.exception(
-                "Échec envoi SMS espace CNAPS request_id=%s telephone=%r",
+                "Échec envoi SMS espace CNAPS request_id=%s telephone=%r error=%s",
                 request_id,
                 req["telephone"],
+                exc,
             )
 
     return ("", 204)
