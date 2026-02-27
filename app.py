@@ -628,6 +628,41 @@ def data_json():
             "Access-Control-Allow-Origin": "*"
         }
 
+@app.route('/notifications_espace_cnaps_a_valider.json')
+def notifications_espace_cnaps_a_valider_json():
+    """Retourne les comptes CNAPS créés qui doivent être validés côté gestionstagiaires."""
+    headers = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, nom, prenom, espace_cnaps, updated_at
+                FROM public_requests
+                WHERE COALESCE(espace_cnaps, 'A créer') = 'Créé'
+                ORDER BY id DESC
+                """
+            ).fetchall()
+
+        notifications = [
+            {
+                "request_id": row["id"],
+                "nom": row["nom"],
+                "prenom": row["prenom"],
+                "espace_cnaps": row["espace_cnaps"],
+                "updated_at": row["updated_at"],
+                "title": "Notification Compte CNAPS à valider",
+                "message": "Le compte CNAPS de cette personne a été créé, il faut l'appeler pour lui dire de valider son compte",
+            }
+            for row in rows
+        ]
+
+        return {"ok": True, "count": len(notifications), "notifications": notifications}, 200, headers
+    except Exception as e:
+        return {"ok": False, "count": 0, "notifications": [], "error": str(e)}, 500, headers
+
+
 # --- à mettre en bas de l'app cnapsv3 (après les autres routes) ---
 from datetime import datetime, timedelta
 
