@@ -708,10 +708,20 @@ def notifications_espace_cnaps_a_valider_json():
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
-                SELECT id, nom, prenom, email, date_naissance, telephone, espace_cnaps, updated_at
-                FROM public_requests
-                WHERE COALESCE(espace_cnaps, 'A créer') = 'Créé'
-                ORDER BY id DESC
+                SELECT
+                    pr.id,
+                    pr.nom,
+                    pr.prenom,
+                    pr.email,
+                    pr.date_naissance,
+                    pr.telephone,
+                    pr.espace_cnaps,
+                    pr.updated_at
+                FROM public_requests pr
+                LEFT JOIN dossiers d ON d.id = pr.dossier_id
+                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'cree'
+                  AND LOWER(TRIM(REPLACE(REPLACE(COALESCE(d.statut_cnaps, ''), 'é', 'e'), 'É', 'E'))) != 'valide'
+                ORDER BY pr.id DESC
                 """
             ).fetchall()
 
