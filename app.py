@@ -1091,7 +1091,6 @@ def _send_sms(to_phone: str, message: str):
 def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation_url: str):
     safe_prenom = (prenom or "").strip() or ""
     safe_formation = (formation_name or "").strip() or "votre formation"
-    safe_validation_url = (validation_url or "").strip()
     return (
         "⚠️ Formation sécurité — Intégrale Academy\n"
         "INFO IMPORTANTE\n\n"
@@ -1102,8 +1101,6 @@ def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation
         "3) Cette validation finalise la création de votre compte CNAPS.\n\n"
         "⏳ Attention : le lien expire dans moins de 12 heures.\n"
         "Passé ce délai, nous devrons recommencer toute la procédure.\n\n"
-        "✅ Une fois votre compte CNAPS validé, confirmez-le ici :\n"
-        f"{safe_validation_url}\n\n"
         "Merci,\n"
         "Intégrale Academy"
     )
@@ -1195,6 +1192,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                     "emails/espace_cnaps_rappel_4h.html",
                     formation_name=formation_name,
                     logo_url=url_for("static", filename="logo.png", _external=True),
+                    dracar_url=url_for("static", filename="dracar.png", _external=True),
                 )
                 _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
             _send_sms(
@@ -1212,6 +1210,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                     "emails/espace_cnaps_rappel_2h.html",
                     formation_name=formation_name,
                     logo_url=url_for("static", filename="logo.png", _external=True),
+                    dracar_url=url_for("static", filename="dracar.png", _external=True),
                 )
                 _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
             _send_sms(
@@ -1240,6 +1239,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
                 "emails/espace_cnaps_rappel_4h.html",
                 formation_name=formation_name,
                 logo_url=url_for("static", filename="logo.png", _external=True),
+                dracar_url=url_for("static", filename="dracar.png", _external=True),
             )
             _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
 
@@ -1257,6 +1257,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
                 "emails/espace_cnaps_rappel_2h.html",
                 formation_name=formation_name,
                 logo_url=url_for("static", filename="logo.png", _external=True),
+                dracar_url=url_for("static", filename="dracar.png", _external=True),
             )
             _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
 
