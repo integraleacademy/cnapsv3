@@ -701,6 +701,55 @@ def data_json():
     try:
         errors = []
         with sqlite3.connect(DB_NAME) as conn:
+            espace_cnaps_normalized_expr = """
+                LOWER(
+                    TRIM(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        REPLACE(
+                                            REPLACE(
+                                                REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), char(160), ' '),
+                                                char(9),
+                                                ' '
+                                            ),
+                                            char(10),
+                                            ' '
+                                        ),
+                                        char(13),
+                                        ' '
+                                    ),
+                                    'é',
+                                    'e'
+                                ),
+                                'è',
+                                'e'
+                            ),
+                            'ê',
+                            'e'
+                        )
+                    )
+                )
+            """
+            statut_cnaps_normalized_expr = """
+                LOWER(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                TRIM(COALESCE(d.statut_cnaps, '')),
+                                char(160),
+                                ''
+                            ),
+                            ' ',
+                            ''
+                        ),
+                        '-',
+                        ''
+                    )
+                )
+            """
+
             instruction_count, err = _safe_count(
                 conn,
                 "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
@@ -710,16 +759,12 @@ def data_json():
 
             demande_a_faire_count, err = _safe_count(
                 conn,
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM public_requests pr
                 LEFT JOIN dossiers d ON d.id = pr.dossier_id
-                WHERE LOWER(
-                        TRIM(
-                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
-                        )
-                    ) LIKE 'valid%'
-                  AND TRIM(COALESCE(d.statut_cnaps, '')) IN ('', '--')
+                WHERE {espace_cnaps_normalized_expr} = 'valide'
+                  AND {statut_cnaps_normalized_expr} = ''
                 """,
             )
             if err:
@@ -751,14 +796,10 @@ def data_json():
 
             comptes_cnaps_a_creer_count, err = _safe_count(
                 conn,
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM public_requests pr
-                WHERE LOWER(
-                        TRIM(
-                            REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'), 'è', 'e'), 'ê', 'e')
-                        )
-                    ) LIKE 'a cre%'
+                WHERE {espace_cnaps_normalized_expr} = 'a creer'
                 """,
             )
             if err:
