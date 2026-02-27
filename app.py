@@ -454,6 +454,45 @@ def update_commentaire(id):
     return redirect("/")
 
 
+@app.route("/a-traiter/<int:request_id>/telephone", methods=["POST"])
+@login_required
+def update_request_telephone(request_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        telephone = (data.get("telephone") or "").strip()
+    else:
+        telephone = (request.form.get("telephone") or "").strip()
+
+    if telephone and not _normalize_phone_number(telephone):
+        return jsonify({"ok": False, "error": "Numéro de téléphone invalide"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id, dossier_id FROM public_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        conn.execute(
+            """
+            UPDATE public_requests
+            SET telephone = ?, updated_at = datetime('now','localtime')
+            WHERE id = ?
+            """,
+            (telephone, request_id),
+        )
+
+        if req["dossier_id"] and _table_has_column(conn, "dossiers", "telephone"):
+            conn.execute(
+                "UPDATE dossiers SET telephone = ? WHERE id = ?",
+                (telephone, req["dossier_id"]),
+            )
+
+    return jsonify({"ok": True})
+
+
 @app.route("/statut/<int:id>/<string:new_status>", methods=["POST"])
 @login_required
 def update_statut(id, new_status):

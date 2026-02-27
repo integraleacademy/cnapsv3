@@ -68,7 +68,7 @@
 
     table {
       width: 100%;
-      min-width: 1650px;
+      min-width: 1800px;
       border-collapse: collapse;
     }
 
@@ -153,6 +153,7 @@
     }
 
     .commentaire-input,
+    .telephone-input,
     .cnaps-select {
       width: 100%;
       padding: 8px;
@@ -232,6 +233,7 @@
       <tr>
         <th>Nom</th>
         <th>Prénom</th>
+        <th>Téléphone</th>
         <th>Affecter une formation</th>
         <th>Formation</th>
         <th>Dates de formation</th>
@@ -252,6 +254,16 @@
       <tr>
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
+        <td>
+          <input
+            type="tel"
+            class="telephone-input"
+            data-request-id="{{ r.id }}"
+            value="{{ r.telephone or '' }}"
+            placeholder="Ex: 0612345678"
+          >
+          <div class="save-hint">Sauvegarde automatique</div>
+        </td>
         <td>
           {% if r.formation and r.session_date %}
             <button class="btn grey" disabled>Affectée</button>
@@ -508,6 +520,54 @@ document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   });
 
   input.addEventListener('blur', save);
+});
+
+document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => {
+  let timeoutId;
+  let lastSaved = (input.value || '').trim();
+
+  const hasEnoughDigits = (value) => {
+    const digits = (value || '').replace(/\D/g, '');
+    return digits.length >= 9;
+  };
+
+  const save = ({ showAlertOnError = true } = {}) => {
+    const rid = input.dataset.requestId;
+    if (!rid) return;
+
+    const value = (input.value || '').trim();
+    if (value === lastSaved) return;
+
+    fetch(`/a-traiter/${rid}/telephone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telephone: value })
+    }).then(async (response) => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Erreur de sauvegarde du téléphone');
+      }
+
+      lastSaved = value;
+      input.value = value;
+    }).catch((error) => {
+      if (showAlertOnError) {
+        window.alert(error.message || 'Impossible de sauvegarder le téléphone');
+      }
+      input.value = lastSaved;
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timeoutId);
+    const value = (input.value || '').trim();
+    if (value && !hasEnoughDigits(value)) {
+      return;
+    }
+    timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
+  });
+
+  input.addEventListener('blur', () => save({ showAlertOnError: true }));
 });
 
 document.querySelectorAll('.dracar-link').forEach(link => {
