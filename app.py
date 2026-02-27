@@ -186,6 +186,8 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_4h_sent_at TEXT")
         if "cnaps_reminder_2h_sent_at" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_2h_sent_at TEXT")
+        if "espace_cnaps_created_sms_sent_at" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_created_sms_sent_at TEXT")
         if "telephone" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN telephone TEXT")
 
@@ -1356,11 +1358,13 @@ def update_espace_cnaps(request_id):
             update_fields.append("espace_cnaps_created_at = ?")
             update_fields.append("cnaps_reminder_4h_sent_at = NULL")
             update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+            update_fields.append("espace_cnaps_created_sms_sent_at = NULL")
             params.append(_to_db_datetime(_now_france()))
         elif nouvel_etat == "A créer":
             update_fields.append("espace_cnaps_created_at = NULL")
             update_fields.append("cnaps_reminder_4h_sent_at = NULL")
             update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+            update_fields.append("espace_cnaps_created_sms_sent_at = NULL")
 
         params.append(request_id)
         conn.execute(
@@ -1397,16 +1401,40 @@ def update_espace_cnaps(request_id):
                 request_id,
             )
 
-        validation_url = f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}"
-        sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
-        try:
-            _send_sms(req["telephone"], sms)
-        except Exception as exc:
-            app.logger.exception(
-                "Échec envoi SMS espace CNAPS request_id=%s telephone=%r error=%s",
+        can_send_sms = False
+        with sqlite3.connect(DB_NAME) as conn_sms:
+            claimed = conn_sms.execute(
+                """
+                UPDATE public_requests
+                SET espace_cnaps_created_sms_sent_at = ?
+                WHERE id = ?
+                  AND (espace_cnaps_created_sms_sent_at IS NULL OR TRIM(espace_cnaps_created_sms_sent_at) = '')
+                """,
+                (_to_db_datetime(_now_france()), request_id),
+            )
+            can_send_sms = claimed.rowcount > 0
+
+        if can_send_sms:
+            validation_url = f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}"
+            sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
+            try:
+                _send_sms(req["telephone"], sms)
+            except Exception as exc:
+                with sqlite3.connect(DB_NAME) as conn_sms:
+                    conn_sms.execute(
+                        "UPDATE public_requests SET espace_cnaps_created_sms_sent_at = NULL WHERE id = ?",
+                        (request_id,),
+                    )
+                app.logger.exception(
+                    "Échec envoi SMS espace CNAPS request_id=%s telephone=%r error=%s",
+                    request_id,
+                    req["telephone"],
+                    exc,
+                )
+        else:
+            app.logger.warning(
+                "SMS deja envoye pour request_id=%s, envoi ignore pour eviter doublon",
                 request_id,
-                req["telephone"],
-                exc,
             )
     else:
         app.logger.warning(
