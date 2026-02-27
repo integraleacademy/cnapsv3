@@ -1125,6 +1125,7 @@ def public_form():
         "emails/confirmation_depot.html",
         prenom=prenom,
         logo_url=url_for("static", filename="logo.png", _external=True),
+        dracar_url=url_for("static", filename="dracar.png", _external=True),
     )
     _send_email_html(
         email,
