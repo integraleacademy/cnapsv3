@@ -667,7 +667,7 @@ def notifications_espace_cnaps_a_valider_json():
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
-                SELECT id, nom, prenom, espace_cnaps, updated_at
+                SELECT id, nom, prenom, email, date_naissance, espace_cnaps, updated_at
                 FROM public_requests
                 WHERE COALESCE(espace_cnaps, 'A créer') = 'Créé'
                 ORDER BY id DESC
@@ -679,10 +679,16 @@ def notifications_espace_cnaps_a_valider_json():
                 "request_id": row["id"],
                 "nom": row["nom"],
                 "prenom": row["prenom"],
+                "login": row["email"],
+                "password": _dracar_password(row["nom"], row["date_naissance"]),
                 "espace_cnaps": row["espace_cnaps"],
                 "updated_at": row["updated_at"],
                 "title": "Notification Compte CNAPS à valider",
-                "message": "Le compte CNAPS de cette personne a été créé, il faut l'appeler pour lui dire de valider son compte",
+                "message": (
+                    "Le compte CNAPS de cette personne a été créé. "
+                    "Il faut l'appeler pour lui dire de valider son compte et lui communiquer ses identifiants : "
+                    f"login {row['email']} / mot de passe {_dracar_password(row['nom'], row['date_naissance'])}."
+                ),
             }
             for row in rows
         ]
