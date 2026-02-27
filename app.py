@@ -840,6 +840,121 @@ def data_json():
             "error": str(e),
         }, 200, headers
 
+
+@app.route("/summary.json")
+def summary_json():
+    """Retourne les compteurs globaux nécessaires à plateformegestion."""
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+    }
+
+    def _safe_count(conn, query):
+        try:
+            return int(conn.execute(query).fetchone()[0] or 0)
+        except (sqlite3.OperationalError, TypeError, ValueError):
+            return 0
+
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            espace_cnaps_normalized_expr = """
+                LOWER(
+                    TRIM(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        REPLACE(
+                                            REPLACE(
+                                                REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), char(160), ' '),
+                                                char(9),
+                                                ' '
+                                            ),
+                                            char(10),
+                                            ' '
+                                        ),
+                                        char(13),
+                                        ' '
+                                    ),
+                                    'é',
+                                    'e'
+                                ),
+                                'è',
+                                'e'
+                            ),
+                            'ê',
+                            'e'
+                        )
+                    )
+                )
+            """
+            statut_cnaps_normalized_expr = """
+                LOWER(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                TRIM(COALESCE(d.statut_cnaps, '')),
+                                char(160),
+                                ''
+                            ),
+                            ' ',
+                            ''
+                        ),
+                        '-',
+                        ''
+                    )
+                )
+            """
+
+            demandes_a_faire = _safe_count(
+                conn,
+                f"""
+                SELECT COUNT(*)
+                FROM public_requests pr
+                LEFT JOIN dossiers d ON d.id = pr.dossier_id
+                WHERE {espace_cnaps_normalized_expr} = 'valide'
+                  AND {statut_cnaps_normalized_expr} = ''
+                """,
+            )
+
+            documents_a_controler = _safe_count(
+                conn,
+                """
+                SELECT COUNT(*)
+                FROM request_documents rd
+                WHERE rd.is_active = 1
+                  AND rd.is_conforme IS NULL
+                """,
+            )
+
+            comptes_cnaps_a_creer = _safe_count(
+                conn,
+                f"""
+                SELECT COUNT(*)
+                FROM public_requests pr
+                WHERE {espace_cnaps_normalized_expr} = 'a creer'
+                """,
+            )
+
+            instruction = _safe_count(
+                conn,
+                "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
+            )
+
+        return {
+            "demandes_a_faire": demandes_a_faire,
+            "documents_a_controler": documents_a_controler,
+            "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
+            "instruction": instruction,
+        }, 200, headers
+    except Exception:
+        return {
+            "demandes_a_faire": 0,
+            "documents_a_controler": 0,
+            "comptes_cnaps_a_creer": 0,
+            "instruction": 0,
+        }, 200, headers
+
 @app.route('/notifications_espace_cnaps_a_valider.json')
 def notifications_espace_cnaps_a_valider_json():
     """Retourne les comptes CNAPS créés qui doivent être validés côté gestionstagiaires."""
