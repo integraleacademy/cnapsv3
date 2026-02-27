@@ -483,20 +483,39 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
   });
 });
 
+async function syncEspaceStatus(select){
+  const rid = select.dataset.requestId;
+  if (!rid) return;
+  if (select.dataset.syncRunning === '1') return;
+
+  select.dataset.syncRunning = '1';
+
+  try {
+    while (select.dataset.syncQueuedValue) {
+      const queuedValue = select.dataset.syncQueuedValue;
+      select.dataset.syncQueuedValue = '';
+
+      await fetch(`/a-traiter/${rid}/espace-cnaps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ espace_cnaps: queuedValue })
+      });
+    }
+  } finally {
+    select.dataset.syncRunning = '0';
+    applyEspaceClass(select);
+    refreshDemandeIndicators();
+  }
+}
+
 document.querySelectorAll("select[name='espace_cnaps']").forEach(select => {
   applyEspaceClass(select);
-  select.addEventListener('change', () => {
-    const rid = select.dataset.requestId;
-    if (!rid) return;
+  select.dataset.syncRunning = '0';
+  select.dataset.syncQueuedValue = '';
 
-    fetch(`/a-traiter/${rid}/espace-cnaps`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ espace_cnaps: select.value })
-    }).then(() => {
-      applyEspaceClass(select);
-      refreshDemandeIndicators();
-    });
+  select.addEventListener('change', () => {
+    select.dataset.syncQueuedValue = select.value;
+    syncEspaceStatus(select);
   });
 });
 
