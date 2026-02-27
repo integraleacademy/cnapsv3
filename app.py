@@ -1764,7 +1764,8 @@ def request_documents(request_id):
         conn.row_factory = sqlite3.Row
         req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
         if not req:
-            abort(404)
+            flash("Ce dossier n'existe plus ou a déjà été traité.", "warning")
+            return redirect(url_for("a_traiter"))
 
         docs = conn.execute(
             """
@@ -1955,7 +1956,8 @@ def download_full_bundle(request_id):
         conn.row_factory = sqlite3.Row
         req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
         if not req:
-            abort(404)
+            flash("Ce dossier n'existe plus ou a déjà été traité.", "warning")
+            return redirect(url_for("a_traiter"))
 
         docs = conn.execute(
             "SELECT * FROM request_documents WHERE request_id = ? AND is_active = 1",
