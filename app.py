@@ -723,6 +723,14 @@ def data_json():
                 """
             ).fetchone()[0]
 
+            comptes_cnaps_a_creer_count = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM public_requests pr
+                WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'a creer'
+                """
+            ).fetchone()[0]
+
         headers = {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
@@ -732,8 +740,10 @@ def data_json():
             "demande_a_faire": demande_a_faire_count,
             "documents_a_controler": documents_a_controler_count,
             "dossiers_documents_a_controler": dossiers_documents_a_controler_count,
+            "comptes_cnaps_a_creer": comptes_cnaps_a_creer_count,
             "has_demande_a_faire": demande_a_faire_count > 0,
             "has_documents_a_controler": documents_a_controler_count > 0,
+            "has_compte_cnaps_a_creer": comptes_cnaps_a_creer_count > 0,
         }, 200, headers
 
     except Exception as e:
@@ -743,8 +753,10 @@ def data_json():
             "demande_a_faire": -1,
             "documents_a_controler": -1,
             "dossiers_documents_a_controler": -1,
+            "comptes_cnaps_a_creer": -1,
             "has_demande_a_faire": False,
             "has_documents_a_controler": False,
+            "has_compte_cnaps_a_creer": False,
             "error": str(e),
         }, 500, {
             "Access-Control-Allow-Origin": "*"
