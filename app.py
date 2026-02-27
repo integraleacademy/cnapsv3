@@ -1135,6 +1135,26 @@ def _formation_full_name(formation: str):
     }.get(formation or "", formation or "votre formation")
 
 
+def _is_cnaps_auto_reminder_allowed(now_dt: datetime | None = None) -> bool:
+    current = (now_dt or _now_france()).astimezone(FRANCE_TZ)
+    return 7 <= current.hour < 21
+
+
+def _cnaps_sms_message(req, expiration_label: str, urgent: bool = False) -> str:
+    prefix = "URGENT RAPPEL" if urgent else "RAPPEL"
+    prenom = (req.get("prenom") or "").strip()
+    formation_name = _formation_full_name(req.get("formation"))
+    return (
+        f"{prefix} Intégrale Academy : Bonjour {prenom}, Je reviens vers vous concernant la demande d'autorisation "
+        f"que nous devons envoyer au CNAPS (Ministère de l'intérieur) pour votre formation {formation_name}. "
+        "Vous avez dû recevoir un mail de la part du CNAPS (Ministère de l'intérieur) qui vous invite à cliquer "
+        "sur un lien pour valider votre adresse email et confirmer la création de votre compte CNAPS. "
+        f"Attention, ce lien expire le {expiration_label}. Nous vous remercions de bien vouloir faire le nécessaire "
+        "dès que possible afin de ne pas retarder l'instruction de votre dossier. Veuillez ne pas prendre en compte "
+        "ce message si vous avez déjà fait le nécessaire"
+    )
+
+
 def _formation_code(formation: str):
     normalized = (formation or "").strip().upper()
     if normalized in {"APS", "A3P"}:
@@ -1166,6 +1186,9 @@ def _required_doc_types(heberge: int, non_francais: int):
 
 
 def _send_cnaps_reminders(conn, requests_rows):
+    if not _is_cnaps_auto_reminder_allowed():
+        return
+
     for req in requests_rows:
         if (req.get("espace_cnaps") or "") != "Créé":
             continue
@@ -1197,7 +1220,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                 _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
             _send_sms(
                 req.get("telephone"),
-                f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
+                _cnaps_sms_message(req, expiration_label),
             )
             conn.execute(
                 "UPDATE public_requests SET cnaps_reminder_4h_sent_at = ? WHERE id = ?",
@@ -1215,7 +1238,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                 _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
             _send_sms(
                 req.get("telephone"),
-                f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
+                _cnaps_sms_message(req, expiration_label, urgent=True),
             )
             conn.execute(
                 "UPDATE public_requests SET cnaps_reminder_2h_sent_at = ? WHERE id = ?",
@@ -1245,7 +1268,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
 
         _send_sms(
             req.get("telephone"),
-            f"Rappel CNAPS: votre lien expire le {expiration_label}. Merci de valider votre espace CNAPS.",
+            _cnaps_sms_message(req, expiration_label),
         )
         conn.execute(
             "UPDATE public_requests SET cnaps_reminder_4h_sent_at = ? WHERE id = ?",
@@ -1263,7 +1286,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
 
         _send_sms(
             req.get("telephone"),
-            f"ATTENTION CNAPS: votre lien expire le {expiration_label}. Il reste moins de 2h.",
+            _cnaps_sms_message(req, expiration_label, urgent=True),
         )
         conn.execute(
             "UPDATE public_requests SET cnaps_reminder_2h_sent_at = ? WHERE id = ?",
