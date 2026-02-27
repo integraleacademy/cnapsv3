@@ -687,55 +687,76 @@ def logout():
 @app.route("/data.json")
 def data_json():
     """Retourne les compteurs du suivi CNAPS pour la plateforme de gestion."""
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            instruction_count = conn.execute(
-                "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'"
-            ).fetchone()[0]
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+    }
 
-            demande_a_faire_count = conn.execute(
+    def _safe_count(conn, query):
+        try:
+            return conn.execute(query).fetchone()[0], None
+        except sqlite3.OperationalError as exc:
+            return 0, str(exc)
+
+    try:
+        errors = []
+        with sqlite3.connect(DB_NAME) as conn:
+            instruction_count, err = _safe_count(
+                conn,
+                "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
+            )
+            if err:
+                errors.append(f"instruction: {err}")
+
+            demande_a_faire_count, err = _safe_count(
+                conn,
                 """
                 SELECT COUNT(*)
                 FROM public_requests pr
                 LEFT JOIN dossiers d ON d.id = pr.dossier_id
                 WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'valide'
                   AND TRIM(COALESCE(d.statut_cnaps, '')) IN ('', '--')
-                """
-            ).fetchone()[0]
+                """,
+            )
+            if err:
+                errors.append(f"demande_a_faire: {err}")
 
-            documents_a_controler_count = conn.execute(
+            documents_a_controler_count, err = _safe_count(
+                conn,
                 """
                 SELECT COUNT(*)
                 FROM request_documents rd
-                JOIN public_requests pr ON pr.id = rd.request_id
                 WHERE rd.is_active = 1
                   AND rd.is_conforme IS NULL
-                """
-            ).fetchone()[0]
+                """,
+            )
+            if err:
+                errors.append(f"documents_a_controler: {err}")
 
-            dossiers_documents_a_controler_count = conn.execute(
+            dossiers_documents_a_controler_count, err = _safe_count(
+                conn,
                 """
                 SELECT COUNT(DISTINCT rd.request_id)
                 FROM request_documents rd
-                JOIN public_requests pr ON pr.id = rd.request_id
                 WHERE rd.is_active = 1
                   AND rd.is_conforme IS NULL
-                """
-            ).fetchone()[0]
+                """,
+            )
+            if err:
+                errors.append(f"dossiers_documents_a_controler: {err}")
 
-            comptes_cnaps_a_creer_count = conn.execute(
+            comptes_cnaps_a_creer_count, err = _safe_count(
+                conn,
                 """
                 SELECT COUNT(*)
                 FROM public_requests pr
                 WHERE LOWER(TRIM(REPLACE(REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), 'é', 'e'), 'É', 'E'))) = 'a creer'
-                """
-            ).fetchone()[0]
+                """,
+            )
+            if err:
+                errors.append(f"comptes_cnaps_a_creer: {err}")
 
-        headers = {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        }
-        return {
+        payload = {
             "instruction": instruction_count,
             "demande_a_faire": demande_a_faire_count,
             "documents_a_controler": documents_a_controler_count,
@@ -744,23 +765,25 @@ def data_json():
             "has_demande_a_faire": demande_a_faire_count > 0,
             "has_documents_a_controler": documents_a_controler_count > 0,
             "has_compte_cnaps_a_creer": comptes_cnaps_a_creer_count > 0,
-        }, 200, headers
+        }
+        if errors:
+            payload["warnings"] = errors
+
+        return payload, 200, headers
 
     except Exception as e:
         print("⚠️ Erreur data.json:", e)
         return {
-            "instruction": -1,
-            "demande_a_faire": -1,
-            "documents_a_controler": -1,
-            "dossiers_documents_a_controler": -1,
-            "comptes_cnaps_a_creer": -1,
+            "instruction": 0,
+            "demande_a_faire": 0,
+            "documents_a_controler": 0,
+            "dossiers_documents_a_controler": 0,
+            "comptes_cnaps_a_creer": 0,
             "has_demande_a_faire": False,
             "has_documents_a_controler": False,
             "has_compte_cnaps_a_creer": False,
             "error": str(e),
-        }, 500, {
-            "Access-Control-Allow-Origin": "*"
-        }
+        }, 200, headers
 
 @app.route('/notifications_espace_cnaps_a_valider.json')
 def notifications_espace_cnaps_a_valider_json():
