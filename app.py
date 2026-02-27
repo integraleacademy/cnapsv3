@@ -186,6 +186,8 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_4h_sent_at TEXT")
         if "cnaps_reminder_2h_sent_at" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN cnaps_reminder_2h_sent_at TEXT")
+        if "espace_cnaps_created_sms_sent_at" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_created_sms_sent_at TEXT")
         if "telephone" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN telephone TEXT")
 
@@ -889,8 +891,26 @@ def _send_sms(to_phone: str, message: str):
                 },
                 method="POST",
             )
-            with urllib_request.urlopen(req, timeout=10):
-                pass
+            try:
+                with urllib_request.urlopen(req, timeout=10) as resp:
+                    response_body = resp.read().decode("utf-8", errors="replace")
+                app.logger.info(
+                    "SMS Brevo accepté phone=%s sender=%r response=%s",
+                    normalized_phone,
+                    BREVO_SMS_SENDER,
+                    response_body,
+                )
+            except HTTPError as exc:
+                error_body = ""
+                if exc.fp is not None:
+                    error_body = exc.fp.read().decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"Brevo SMS rejected request status={exc.code} phone={normalized_phone} sender={BREVO_SMS_SENDER!r} response={error_body}"
+                ) from exc
+            except URLError as exc:
+                raise RuntimeError(
+                    f"Brevo SMS request failed phone={normalized_phone} sender={BREVO_SMS_SENDER!r} reason={exc.reason}"
+                ) from exc
             return
 
         if ALLOW_SMS_MOCK:
@@ -910,8 +930,26 @@ def _send_sms(to_phone: str, message: str):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib_request.urlopen(req, timeout=10):
-        pass
+    try:
+        with urllib_request.urlopen(req, timeout=10) as resp:
+            response_body = resp.read().decode("utf-8", errors="replace")
+        app.logger.info(
+            "SMS webhook accepté phone=%s url=%r response=%s",
+            normalized_phone,
+            SMS_WEBHOOK_URL,
+            response_body,
+        )
+    except HTTPError as exc:
+        error_body = ""
+        if exc.fp is not None:
+            error_body = exc.fp.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"SMS webhook rejected request status={exc.code} phone={normalized_phone} url={SMS_WEBHOOK_URL!r} response={error_body}"
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"SMS webhook request failed phone={normalized_phone} url={SMS_WEBHOOK_URL!r} reason={exc.reason}"
+        ) from exc
 
 
 def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation_url: str):
@@ -933,7 +971,6 @@ def _build_espace_cnaps_created_sms(prenom: str, formation_name: str, validation
         "Merci,\n"
         "Intégrale Academy"
     )
-
 
 def _normalize_phone_number(phone: str):
     digits = "".join(ch for ch in (phone or "") if ch.isdigit())
@@ -1261,6 +1298,12 @@ def update_espace_cnaps(request_id):
             return jsonify({"ok": False, "error": "Demande introuvable"}), 404
 
         old_status = req["espace_cnaps"] or "A créer"
+        app.logger.warning(
+            "Transition espace CNAPS request_id=%s old=%r new=%r",
+            request_id,
+            old_status,
+            nouvel_etat,
+        )
         token = (req["espace_cnaps_validation_token"] or "").strip() if "espace_cnaps_validation_token" in req.keys() else ""
         if not token:
             token = _new_validation_token()
@@ -1276,11 +1319,13 @@ def update_espace_cnaps(request_id):
             update_fields.append("espace_cnaps_created_at = ?")
             update_fields.append("cnaps_reminder_4h_sent_at = NULL")
             update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+            update_fields.append("espace_cnaps_created_sms_sent_at = NULL")
             params.append(_to_db_datetime(_now_france()))
         elif nouvel_etat == "A créer":
             update_fields.append("espace_cnaps_created_at = NULL")
             update_fields.append("cnaps_reminder_4h_sent_at = NULL")
             update_fields.append("cnaps_reminder_2h_sent_at = NULL")
+            update_fields.append("espace_cnaps_created_sms_sent_at = NULL")
 
         params.append(request_id)
         conn.execute(
@@ -1317,16 +1362,48 @@ def update_espace_cnaps(request_id):
                 request_id,
             )
 
-        validation_url = f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}"
-        sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
-        try:
-            _send_sms(req["telephone"], sms)
-        except Exception:
-            app.logger.exception(
-                "Échec envoi SMS espace CNAPS request_id=%s telephone=%r",
-                request_id,
-                req["telephone"],
+        can_send_sms = False
+        with sqlite3.connect(DB_NAME) as conn_sms:
+            claimed = conn_sms.execute(
+                """
+                UPDATE public_requests
+                SET espace_cnaps_created_sms_sent_at = ?
+                WHERE id = ?
+                  AND (espace_cnaps_created_sms_sent_at IS NULL OR TRIM(espace_cnaps_created_sms_sent_at) = '')
+                """,
+                (_to_db_datetime(_now_france()), request_id),
             )
+            can_send_sms = claimed.rowcount > 0
+
+        if can_send_sms:
+            validation_url = f"{PUBLIC_APP_BASE_URL}{url_for('validate_espace_cnaps', token=token)}"
+            sms = _build_espace_cnaps_created_sms(req["prenom"], formation_name, validation_url)
+            try:
+                _send_sms(req["telephone"], sms)
+            except Exception as exc:
+                with sqlite3.connect(DB_NAME) as conn_sms:
+                    conn_sms.execute(
+                        "UPDATE public_requests SET espace_cnaps_created_sms_sent_at = NULL WHERE id = ?",
+                        (request_id,),
+                    )
+                app.logger.exception(
+                    "Échec envoi SMS espace CNAPS request_id=%s telephone=%r error=%s",
+                    request_id,
+                    req["telephone"],
+                    exc,
+                )
+        else:
+            app.logger.warning(
+                "SMS deja envoye pour request_id=%s, envoi ignore pour eviter doublon",
+                request_id,
+            )
+    else:
+        app.logger.warning(
+            "SMS non declenche pour request_id=%s (condition old!=Créé && new==Créé non satisfaite) old=%r new=%r",
+            request_id,
+            old_status,
+            nouvel_etat,
+        )
 
     return ("", 204)
 
