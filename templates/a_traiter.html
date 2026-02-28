@@ -152,6 +152,7 @@
     .recap-nouveau { background: linear-gradient(135deg, #3b82f6, #2563eb); }
     .recap-demande { background: linear-gradient(135deg, #f97316, #ea580c); }
     .recap-documents { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    .recap-non-conformes { background: linear-gradient(135deg, #f59e0b, #d97706); }
     .recap-compte { background: linear-gradient(135deg, #ef4444, #dc2626); }
     .recap-instruction { background: linear-gradient(135deg, #14b8a6, #0f766e); }
 
@@ -251,7 +252,7 @@
 </head>
 <body>
 <div class="wrap">
-  {% set recap_ns = namespace(demande=0, nouveau=0, documents=0, compte=0, instruction=0) %}
+  {% set recap_ns = namespace(demande=0, nouveau=0, documents=0, non_conformes=0, compte=0, instruction=0) %}
   {% for item in requests %}
     {% set item_espace = (item.espace_cnaps or 'A créer')|trim %}
     {% set item_cnaps = (item.statut_cnaps or '')|trim %}
@@ -263,6 +264,7 @@
       {% set recap_ns.demande = recap_ns.demande + 1 %}
     {% endif %}
     {% set recap_ns.documents = recap_ns.documents + (item.en_attente or 0) %}
+    {% set recap_ns.non_conformes = recap_ns.non_conformes + (item.notified_expected or 0) %}
     {% if item_espace == 'A créer' %}
       {% set recap_ns.compte = recap_ns.compte + 1 %}
     {% endif %}
@@ -291,6 +293,10 @@
     <div class="recap-card recap-documents">
       <div class="recap-title">Documents à contrôler</div>
       <div class="recap-value" id="recapDocuments">{{ recap_ns.documents }}</div>
+    </div>
+    <div class="recap-card recap-non-conformes">
+      <div class="recap-title">Documents non conformes</div>
+      <div class="recap-value" id="recapDocumentsNonConformes">{{ recap_ns.non_conformes }}</div>
     </div>
     <div class="recap-card recap-compte">
       <div class="recap-title">Compte à créer</div>
@@ -326,7 +332,7 @@
       {% set has_non_conformes = (r.non_conformes > 0) %}
       {% set has_pending_docs = (r.en_attente > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
-      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}">
+      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}">
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
         <td>
@@ -527,6 +533,7 @@ function refreshDemandeIndicators(){
   let demandeCount = 0;
   let nouveauCount = 0;
   let documentsCount = 0;
+  let nonConformesCount = 0;
   let compteCount = 0;
   let instructionCount = 0;
 
@@ -546,6 +553,7 @@ function refreshDemandeIndicators(){
     }
 
     documentsCount += Number(row.dataset.pendingDocuments || 0);
+    nonConformesCount += Number(row.dataset.notifiedExpectedDocuments || 0);
 
     if (espaceSelect && normalizeValue(espaceSelect.value) === 'a creer') {
       compteCount += 1;
@@ -559,12 +567,14 @@ function refreshDemandeIndicators(){
   const recapDemande = document.getElementById('recapDemande');
   const recapNouveau = document.getElementById('recapNouveau');
   const recapDocuments = document.getElementById('recapDocuments');
+  const recapDocumentsNonConformes = document.getElementById('recapDocumentsNonConformes');
   const recapCompte = document.getElementById('recapCompte');
   const recapInstruction = document.getElementById('recapInstruction');
 
   if (recapDemande) recapDemande.textContent = demandeCount;
   if (recapNouveau) recapNouveau.textContent = nouveauCount;
   if (recapDocuments) recapDocuments.textContent = documentsCount;
+  if (recapDocumentsNonConformes) recapDocumentsNonConformes.textContent = nonConformesCount;
   if (recapCompte) recapCompte.textContent = compteCount;
   if (recapInstruction) recapInstruction.textContent = instructionCount;
 }

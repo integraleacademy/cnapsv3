@@ -438,7 +438,8 @@ def _load_a_traiter_dataset(conn):
             COALESCE(doc_stats.total_docs, 0) AS total_docs,
             COALESCE(doc_stats.conformes, 0) AS conformes,
             COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
-            COALESCE(doc_stats.en_attente, 0) AS en_attente
+            COALESCE(doc_stats.en_attente, 0) AS en_attente,
+            COALESCE(doc_stats.notified_expected, 0) AS notified_expected
         FROM public_requests pr
         LEFT JOIN dossiers d ON d.id = pr.dossier_id
         LEFT JOIN (
@@ -447,7 +448,8 @@ def _load_a_traiter_dataset(conn):
                 COUNT(*) AS total_docs,
                 SUM(CASE WHEN is_conforme = 1 THEN 1 ELSE 0 END) AS conformes,
                 SUM(CASE WHEN is_conforme = 0 THEN 1 ELSE 0 END) AS non_conformes,
-                SUM(CASE WHEN is_conforme IS NULL THEN 1 ELSE 0 END) AS en_attente
+                SUM(CASE WHEN is_conforme IS NULL THEN 1 ELSE 0 END) AS en_attente,
+                SUM(CASE WHEN review_status = 'notified_expected' THEN 1 ELSE 0 END) AS notified_expected
             FROM request_documents
             WHERE is_active = 1
             GROUP BY request_id
