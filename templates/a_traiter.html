@@ -310,7 +310,7 @@
       <div class="recap-title">Nouveau dossier</div>
       <div class="recap-value" id="recapNouveau">{{ recap_ns.nouveau }}</div>
     </div>
-    <div class="recap-card recap-demande recap-filterable" role="button" tabindex="0" data-recap-filter="demande">
+    <div class="recap-card recap-demande recap-filterable {{ 'recap-zero' if recap_ns.demande == 0 else '' }}" role="button" tabindex="0" data-recap-filter="demande">
       <div class="recap-title">Demande à faire</div>
       <div class="recap-value" id="recapDemande">{{ recap_ns.demande }}</div>
     </div>
