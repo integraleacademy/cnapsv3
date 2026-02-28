@@ -18,6 +18,7 @@ import smtplib
 from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
 import json
+import re
 
 
 
@@ -58,7 +59,7 @@ DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/pe
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
 PUBLIC_APP_BASE_URL = os.getenv("PUBLIC_APP_BASE_URL", "https://cnapsv3.onrender.com").rstrip("/")
 
-FORMATION_SESSIONS = {
+DEFAULT_FORMATION_SESSIONS = {
     "APS": [
         "Du 5 janvier au 6 février 2026",
         "Du 23 mars au 27 avril 2026",
@@ -82,6 +83,67 @@ DEBUG_SUMMARY = os.getenv("DEBUG_SUMMARY", "0").strip() == "1"
 UPLOAD_DIR = "/mnt/data/uploads"
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
+
+
+MONTHS_FR = {
+    "janvier": 1,
+    "février": 2,
+    "fevrier": 2,
+    "mars": 3,
+    "avril": 4,
+    "mai": 5,
+    "juin": 6,
+    "juillet": 7,
+    "août": 8,
+    "aout": 8,
+    "septembre": 9,
+    "octobre": 10,
+    "novembre": 11,
+    "décembre": 12,
+    "decembre": 12,
+}
+
+
+def _parse_day_token(day_token):
+    raw = (day_token or "").strip().lower()
+    if raw in {"1er", "1"}:
+        return 1
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _session_start_date_sort_key(label):
+    text = (label or "").strip().lower()
+    text = re.sub(r"\s+", " ", text)
+
+    match = re.match(
+        r"^du\s+(\d{1,2}|1er)\s+([a-zéèêëàâäîïôöùûüç]+)(?:\s+(\d{4}))?\s+au\s+(\d{1,2}|1er)\s+([a-zéèêëàâäîïôöùûüç]+)\s+(\d{4})$",
+        text,
+    )
+    if not match:
+        return (9999, 12, 31, text)
+
+    start_day = _parse_day_token(match.group(1))
+    start_month = MONTHS_FR.get(match.group(2))
+    start_year = match.group(3)
+
+    end_day = _parse_day_token(match.group(4))
+    end_month = MONTHS_FR.get(match.group(5))
+    end_year = match.group(6)
+
+    if not start_day or not start_month or not end_day or not end_month or not end_year:
+        return (9999, 12, 31, text)
+
+    if start_year:
+        year = int(start_year)
+    else:
+        year = int(end_year)
+        if start_month > end_month:
+            year -= 1
+
+    return (year, start_month, start_day, text)
 
 
 def _now_france():
@@ -115,6 +177,34 @@ def _parse_db_datetime(value):
 
 def _cnaps_expiration_label(expiration_dt):
     return expiration_dt.strftime("%d/%m/%Y à %Hh%M")
+
+
+def _load_formation_sessions(conn):
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT formation_type, session_label
+        FROM formation_sessions
+        ORDER BY formation_type ASC, position ASC, id ASC
+        """
+    ).fetchall()
+
+    sessions = {key: [] for key in DEFAULT_FORMATION_SESSIONS.keys()}
+    for row in rows:
+        formation_type = (row["formation_type"] or "").strip()
+        session_label = (row["session_label"] or "").strip()
+        if formation_type in sessions and session_label:
+            sessions[formation_type].append(session_label)
+
+    for formation_type in sessions:
+        sessions[formation_type].sort(key=_session_start_date_sort_key)
+
+    return sessions
+
+
+def get_formation_sessions():
+    with sqlite3.connect(DB_NAME) as conn:
+        return _load_formation_sessions(conn)
 
 
 def _compute_cnaps_timing(req):
@@ -260,6 +350,31 @@ def init_db():
                 FOREIGN KEY (request_id) REFERENCES public_requests(id) ON DELETE CASCADE
             )
         """)
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS formation_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                formation_type TEXT NOT NULL,
+                session_label TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                UNIQUE (formation_type, session_label)
+            )
+            """
+        )
+
+        existing_count = conn.execute("SELECT COUNT(*) FROM formation_sessions").fetchone()[0]
+        if existing_count == 0:
+            for formation_type, labels in DEFAULT_FORMATION_SESSIONS.items():
+                for index, label in enumerate(labels, start=1):
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO formation_sessions (formation_type, session_label, position)
+                        VALUES (?, ?, ?)
+                        """,
+                        (formation_type, label, index),
+                    )
 
 
 def _record_statut_cnaps_history(conn, dossier_id, nouveau_statut):
@@ -448,8 +563,72 @@ def index():
         statuts_disponibles=statuts_disponibles,
         public_form_url=PUBLIC_FORM_URL,
         a_traiter_count=a_traiter_count,
-        formation_sessions=FORMATION_SESSIONS,
+        formation_sessions=get_formation_sessions(),
     )
+
+
+
+@app.route("/formation-sessions", methods=["POST"])
+@login_required
+def add_formation_session():
+    formation = (request.form.get("formation") or "").strip()
+    session_label = (request.form.get("session_label") or "").strip()
+
+    if formation not in DEFAULT_FORMATION_SESSIONS:
+        flash("Type de formation invalide.", "error")
+        return redirect("/")
+
+    if not session_label:
+        flash("La date/session est obligatoire.", "error")
+        return redirect("/")
+
+    with sqlite3.connect(DB_NAME) as conn:
+        max_position = conn.execute(
+            "SELECT COALESCE(MAX(position), 0) FROM formation_sessions WHERE formation_type = ?",
+            (formation,),
+        ).fetchone()[0]
+
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO formation_sessions (formation_type, session_label, position)
+            VALUES (?, ?, ?)
+            """,
+            (formation, session_label, max_position + 1),
+        )
+
+        inserted = conn.execute("SELECT changes()").fetchone()[0] > 0
+
+    if inserted:
+        flash(f"Session ajoutée pour {formation}.", "success")
+    else:
+        flash("Cette session existe déjà.", "error")
+
+    return redirect("/")
+
+
+@app.route("/formation-sessions/delete", methods=["POST"])
+@login_required
+def delete_formation_session():
+    formation = (request.form.get("formation") or "").strip()
+    session_label = (request.form.get("session_label") or "").strip()
+
+    if formation not in DEFAULT_FORMATION_SESSIONS:
+        flash("Type de formation invalide.", "error")
+        return redirect("/")
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "DELETE FROM formation_sessions WHERE formation_type = ? AND session_label = ?",
+            (formation, session_label),
+        )
+        deleted = conn.execute("SELECT changes()").fetchone()[0] > 0
+
+    if deleted:
+        flash(f"Session supprimée pour {formation}.", "success")
+    else:
+        flash("Session introuvable.", "error")
+
+    return redirect("/")
 
 
 
@@ -1827,7 +2006,7 @@ def a_traiter():
     return render_template(
         "a_traiter.html",
         requests=rows_dict,
-        formation_sessions=FORMATION_SESSIONS,
+        formation_sessions=get_formation_sessions(),
         dracar_auth_url=DRACAR_AUTH_URL,
     )
 
@@ -2045,7 +2224,8 @@ def validate_espace_cnaps(token):
 def assign_formation(request_id):
     formation = (request.form.get("formation") or "").strip()
     session_date = (request.form.get("session_date") or "").strip()
-    if formation not in FORMATION_SESSIONS or session_date not in FORMATION_SESSIONS.get(formation, []):
+    formation_sessions = get_formation_sessions()
+    if formation not in formation_sessions or session_date not in formation_sessions.get(formation, []):
         return jsonify({"ok": False, "error": "Paramètres invalides"}), 400
 
     with sqlite3.connect(DB_NAME) as conn:
