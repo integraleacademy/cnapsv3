@@ -356,6 +356,16 @@ table a:hover {
 
 <div class="top-section">
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom:12px; display:flex; flex-direction:column; gap:8px;">
+          {% for category, message in messages %}
+            <div style="padding:10px 12px; border-radius:8px; color:white; background: {{ '#2ecc71' if category == 'success' else '#e74c3c' }};">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <h3>Filtrer par Statut CNAPS :</h3>
 
     <form method="get" action="/" style="margin-bottom: 20px;">
@@ -376,7 +386,7 @@ table a:hover {
         </select>
     </form>
 
-    <form method="POST" action="/add" style="display:flex; gap:10px; flex-wrap:wrap;">
+    <form method="POST" action="/add" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
         <input name="nom" placeholder="Nom" required>
         <input name="prenom" placeholder="Prénom" required>
 
@@ -386,11 +396,36 @@ table a:hover {
             <option value="A3P">A3P</option>
         </select>
 
-        <select id="session" name="session" required></select>
+        <select id="session" name="session" required>
+          <option value="">-- Choisir une session --</option>
+        </select>
 
         <input name="lien" placeholder="Lien CNAPS (facultatif)">
         <button type="submit">Ajouter</button>
     </form>
+
+    <h3>Gérer les dates de formation (APS / A3P)</h3>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <form method="POST" action="/formation-sessions" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <select name="formation" required>
+          <option value="">Type</option>
+          <option value="APS">APS</option>
+          <option value="A3P">A3P</option>
+        </select>
+        <input name="session_label" placeholder="Ex: Du 10 janvier au 20 février 2027" required>
+        <button type="submit">➕ Ajouter une date</button>
+      </form>
+
+      <form method="POST" action="/formation-sessions/delete" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <select name="formation" required>
+          <option value="">Type</option>
+          <option value="APS">APS</option>
+          <option value="A3P">A3P</option>
+        </select>
+        <input name="session_label" placeholder="Date à supprimer" required>
+        <button type="submit" style="background:#e74c3c;">🗑️ Supprimer une date</button>
+      </form>
+    </div>
 
 </div>
 
@@ -517,6 +552,13 @@ table a:hover {
 
     const sessionsByFormation = {{ formation_sessions | tojson }};
     const sessions = sessionsByFormation[formation] || [];
+
+    if (!sessions.length) {
+      session.add(new Option("-- Aucune session disponible --", ""));
+      return;
+    }
+
+    session.add(new Option("-- Choisir une session --", ""));
     sessions.forEach(function(dateLabel) {
       session.add(new Option(dateLabel, dateLabel));
     });
