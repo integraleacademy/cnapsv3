@@ -79,7 +79,6 @@ FORMATION_SESSIONS = {
 
 DB_NAME = "/mnt/data/cnaps.db"
 DEBUG_SUMMARY = os.getenv("DEBUG_SUMMARY", "0").strip() == "1"
-SUMMARY_DATA_JSON_PATHS = ["/data/data.json", "data.json"]
 UPLOAD_DIR = "/mnt/data/uploads"
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
@@ -345,20 +344,22 @@ def _load_a_traiter_dataset(conn):
 
 
 def _load_summary_source_data(conn):
-    """Charge la même source que /a-traiter, avec fallback JSON Render."""
-    try:
-        data = _load_a_traiter_dataset(conn)
-        if data:
-            return data, "sqlite:/mnt/data/cnaps.db::a_traiter_query"
-    except sqlite3.OperationalError:
-        pass
+    """Charge strictement la source utilisée par /a-traiter."""
+    return _load_a_traiter_dataset(conn), "_load_a_traiter_dataset"
 
-    for json_path in SUMMARY_DATA_JSON_PATHS:
-        if os.path.exists(json_path):
-            with open(json_path, "r", encoding="utf-8") as f:
-                return json.load(f), f"file:{json_path}"
 
-    return [], "sqlite:/mnt/data/cnaps.db::a_traiter_query"
+def _is_demande_a_faire(row):
+    """Détection robuste de "Demande à faire" avec fallback métier /a-traiter."""
+    action_norm = _normalize_action_value(
+        row.get("action_cnaps") or row.get("cnaps_action") or row.get("action")
+    )
+    espace_norm = _normalize_action_value(row.get("espace_cnaps"))
+    statut_norm = _normalize_action_value(row.get("statut_cnaps"))
+
+    if action_norm == "demande_a_faire":
+        return True
+
+    return espace_norm == "valide" and statut_norm in {"", "--"}
 
 
 def _new_validation_token():
@@ -881,25 +882,25 @@ def summary_json():
         with sqlite3.connect(DB_NAME) as conn:
             data, source = _load_summary_source_data(conn)
 
+            debug_payload = {
+                "__debug_count": len(data) if isinstance(data, list) else 0,
+                "__debug_source": source,
+            }
+
             if DEBUG_SUMMARY:
                 dataset_type = type(data).__name__
-                print(f"[DEBUG_SUMMARY] source={source} dataset_size={len(data) if hasattr(data, '__len__') else 'n/a'} type={dataset_type}")
+                print(
+                    f"[DEBUG_SUMMARY] source={source} "
+                    f"dataset_size={debug_payload['__debug_count']} type={dataset_type}"
+                )
                 if isinstance(data, list) and data and isinstance(data[0], dict):
                     print(f"[DEBUG_SUMMARY] first_record_keys={list(data[0].keys())}")
 
-            if not data:
-                return {
-                    "error": "no_data_loaded",
-                    "count": 0,
-                    "source": source,
-                }, 200, headers
-
-            if not isinstance(data, list):
-                return {
-                    "error": "no_data_loaded",
-                    "count": 0,
-                    "source": source,
-                }, 200, headers
+            if not isinstance(data, list) or len(data) == 0:
+                error_payload = {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}
+                if DEBUG_SUMMARY:
+                    return error_payload, 200, headers
+                return {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}, 200, headers
 
             instruction = 0
             demandes_a_faire = 0
@@ -912,13 +913,11 @@ def summary_json():
 
                 statut_norm = _normalize_action_value(row.get("statut_cnaps"))
                 espace_norm = _normalize_action_value(row.get("espace_cnaps"))
-                action_norm = _normalize_action_value(row.get("action_cnaps") or row.get("cnaps_action") or row.get("action"))
 
                 if statut_norm == "instruction":
                     instruction += 1
 
-                # Même logique métier que l'existant: action explicite OU fallback Validé + statut vide.
-                if action_norm == "demande_a_faire" or (espace_norm == "valide" and statut_norm in {"", "--"}):
+                if _is_demande_a_faire(row):
                     demandes_a_faire += 1
 
                 if int(row.get("en_attente") or 0) > 0:
@@ -933,14 +932,16 @@ def summary_json():
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
             "instruction": instruction,
         }
+        if DEBUG_SUMMARY:
+            payload.update(debug_payload)
         return payload, 200, headers
     except Exception as exc:
         if DEBUG_SUMMARY:
             print(f"[DEBUG_SUMMARY] summary_json error={exc}")
         return {
             "error": "no_data_loaded",
-            "count": 0,
-            "source": "sqlite:/mnt/data/cnaps.db::a_traiter_query",
+            "__debug_source": "_load_a_traiter_dataset",
+            "__debug_count": 0,
         }, 200, headers
 
 @app.route('/notifications_espace_cnaps_a_valider.json')
