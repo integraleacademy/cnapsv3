@@ -895,6 +895,35 @@ def summary_json():
                 )
                 if isinstance(data, list) and data and isinstance(data[0], dict):
                     print(f"[DEBUG_SUMMARY] first_record_keys={list(data[0].keys())}")
+                    first_row = data[0]
+                    debug_key_terms = ["cnaps", "statut", "status", "action", "instruction", "doc", "compte"]
+                    debug_payload["__debug_keys"] = sorted(list(first_row.keys()))
+                    debug_payload["__debug_sample"] = {
+                        key: first_row.get(key)
+                        for key in sorted(first_row.keys())
+                        if any(term in key.lower() for term in debug_key_terms)
+                    }
+                    debug_demande_fields = [
+                        "action_cnaps",
+                        "cnaps_action",
+                        "espace_cnaps",
+                        "espace_cnaps_action",
+                        "action_espace_cnaps",
+                        "statut_cnaps",
+                        "cnaps_statut",
+                        "statut",
+                        "status",
+                        "instruction",
+                        "is_instruction",
+                        "en_instruction",
+                        "documents_a_controler",
+                        "en_attente",
+                        "compte_cnaps_a_creer",
+                    ]
+                    debug_payload["__debug_demande_fields"] = {
+                        field: first_row.get(field)
+                        for field in debug_demande_fields
+                    }
 
             if not isinstance(data, list) or len(data) == 0:
                 error_payload = {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}
@@ -911,19 +940,16 @@ def summary_json():
                 if not isinstance(row, dict):
                     continue
 
-                statut_norm = _normalize_action_value(row.get("statut_cnaps"))
-                espace_norm = _normalize_action_value(row.get("espace_cnaps"))
-
-                if statut_norm == "instruction":
+                if _is_instruction_row(row):
                     instruction += 1
 
-                if _is_demande_a_faire(row):
+                if _is_demande_a_faire_summary(row):
                     demandes_a_faire += 1
 
-                if int(row.get("en_attente") or 0) > 0:
+                if _has_documents_to_review(row):
                     documents_a_controler += 1
 
-                if espace_norm == "a creer":
+                if _is_compte_cnaps_a_creer(row):
                     comptes_cnaps_a_creer += 1
 
         payload = {
@@ -1055,6 +1081,95 @@ def _normalize_action_value(value) -> str:
     if compact_alnum in {"demandeafaire", "demandesafaire", "afaire"}:
         return "demande_a_faire"
     return compact
+
+
+def _normalize_summary_key(value) -> str:
+    return _normalize_action_value(value).replace(" ", "_")
+
+
+def _coerce_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+
+    normalized = _normalize_summary_key(str(value))
+    return normalized in {"1", "true", "vrai", "yes", "oui", "y", "on"}
+
+
+def _first_present_value(row: dict, candidates):
+    for field in candidates:
+        if field in row:
+            return row.get(field)
+    return None
+
+
+def _extract_action_value(row: dict):
+    candidates = [
+        "action_cnaps",
+        "cnaps_action",
+        "espace_cnaps_action",
+        "action_espace_cnaps",
+        "statut_action",
+        "action",
+        "demande_action",
+        "demande_statut",
+    ]
+    return _first_present_value(row, candidates)
+
+
+def _is_instruction_row(row: dict) -> bool:
+    statut_candidates = ["statut_cnaps", "cnaps_statut", "statut", "status", "instruction_status"]
+    statut_value = _normalize_summary_key(_first_present_value(row, statut_candidates))
+    if statut_value in {"instruction", "en_instruction", "in_instruction", "instr"}:
+        return True
+
+    boolean_candidates = ["instruction", "is_instruction", "en_instruction", "cnaps_instruction"]
+    return any(_coerce_bool(row.get(field)) for field in boolean_candidates if field in row)
+
+
+def _has_documents_to_review(row: dict) -> bool:
+    docs_count_candidates = ["en_attente", "documents_en_attente", "docs_en_attente", "pending_docs"]
+    for field in docs_count_candidates:
+        if field not in row:
+            continue
+        try:
+            return int(row.get(field) or 0) > 0
+        except (TypeError, ValueError):
+            return _coerce_bool(row.get(field))
+
+    docs_bool_candidates = ["documents_a_controler", "has_pending_docs", "pending_docs_flag"]
+    return any(_coerce_bool(row.get(field)) for field in docs_bool_candidates if field in row)
+
+
+def _is_compte_cnaps_a_creer(row: dict) -> bool:
+    espace_candidates = ["espace_cnaps", "cnaps_espace", "espace_cnaps_statut", "statut_espace_cnaps"]
+    espace_norm = _normalize_summary_key(_first_present_value(row, espace_candidates))
+    if espace_norm in {"a_creer", "acreer", "a_cree", "a_faire"}:
+        return True
+
+    bool_candidates = ["compte_cnaps_a_creer", "cnaps_account_to_create", "has_compte_cnaps_a_creer"]
+    return any(_coerce_bool(row.get(field)) for field in bool_candidates if field in row)
+
+
+def _is_demande_a_faire_summary(row: dict) -> bool:
+    action_norm = _normalize_summary_key(_extract_action_value(row))
+    if action_norm in {
+        "demande_a_faire",
+        "demandes_a_faire",
+        "demandeafaire",
+        "afaire",
+        "a_faire",
+        "demande",
+    }:
+        return True
+
+    # Fallback pour rester aligné avec la logique visuelle de /a-traiter.
+    espace_norm = _normalize_summary_key(row.get("espace_cnaps"))
+    statut_norm = _normalize_summary_key(row.get("statut_cnaps"))
+    return espace_norm == "valide" and statut_norm in {"", "__"}
 
 
 def _table_columns(conn, table_name: str):
