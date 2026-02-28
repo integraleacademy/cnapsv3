@@ -137,6 +137,25 @@
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     }
 
+    .recap-card.recap-filterable {
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    .recap-card.recap-filterable:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .recap-card.recap-filterable:focus-visible {
+      outline: 3px solid #111827;
+      outline-offset: 2px;
+    }
+
+    .recap-card.recap-filter-active {
+      box-shadow: 0 0 0 3px #111827, 0 6px 16px rgba(0, 0, 0, 0.24);
+    }
+
     .recap-title {
       font-size: 13px;
       opacity: 0.9;
@@ -291,7 +310,7 @@
       <div class="recap-title">Nouveau dossier</div>
       <div class="recap-value" id="recapNouveau">{{ recap_ns.nouveau }}</div>
     </div>
-    <div class="recap-card recap-demande {{ 'recap-zero' if recap_ns.demande == 0 else '' }}">
+    <div class="recap-card recap-demande recap-filterable" role="button" tabindex="0" data-recap-filter="demande">
       <div class="recap-title">Demande à faire</div>
       <div class="recap-value" id="recapDemande">{{ recap_ns.demande }}</div>
     </div>
@@ -303,11 +322,11 @@
       <div class="recap-title">Documents non conformes</div>
       <div class="recap-value" id="recapDocumentsNonConformes">{{ recap_ns.non_conformes }}</div>
     </div>
-    <div class="recap-card recap-compte {{ 'recap-zero' if recap_ns.compte == 0 else '' }}">
+    <div class="recap-card recap-compte recap-filterable" role="button" tabindex="0" data-recap-filter="compte">
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
     </div>
-    <div class="recap-card recap-instruction {{ 'recap-zero' if recap_ns.instruction == 0 else '' }}">
+    <div class="recap-card recap-instruction recap-filterable" role="button" tabindex="0" data-recap-filter="instruction">
       <div class="recap-title">Instruction en cours</div>
       <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
     </div>
@@ -481,6 +500,8 @@ const assignDialog = document.getElementById('assignDialog');
 const assignForm = document.getElementById('assignForm');
 const assignFormation = document.getElementById('assignFormation');
 const assignSessionDate = document.getElementById('assignSessionDate');
+const filterableRecapCards = document.querySelectorAll('[data-recap-filter]');
+let activeRecapFilter = '';
 
 function updateAssignDates(){
   assignSessionDate.innerHTML = '<option value="">-- Choisir une date --</option>';
@@ -584,6 +605,40 @@ function refreshDemandeIndicators(){
   if (recapInstruction) recapInstruction.textContent = instructionCount;
 }
 
+function rowMatchesRecapFilter(row, filterKey){
+  const espaceSelect = row.querySelector("select[name='espace_cnaps']");
+  const statutSelect = row.querySelector("select[name='statut_cnaps']");
+
+  if (filterKey === 'demande') return shouldShowDemande(row);
+
+  if (filterKey === 'compte') {
+    return Boolean(espaceSelect) && normalizeValue(espaceSelect.value) === 'a creer';
+  }
+
+  if (filterKey === 'instruction') {
+    return Boolean(statutSelect) && (statutSelect.value || '').toString().trim() === 'INSTRUCTION';
+  }
+
+  return true;
+}
+
+function applyRecapFilter(){
+  const rows = document.querySelectorAll('tbody tr');
+  rows.forEach(row => {
+    const shouldShow = !activeRecapFilter || rowMatchesRecapFilter(row, activeRecapFilter);
+    row.style.display = shouldShow ? '' : 'none';
+  });
+
+  filterableRecapCards.forEach(card => {
+    card.classList.toggle('recap-filter-active', card.dataset.recapFilter === activeRecapFilter);
+  });
+}
+
+function toggleRecapFilter(filterKey){
+  activeRecapFilter = activeRecapFilter === filterKey ? '' : filterKey;
+  applyRecapFilter();
+}
+
 function refreshCnapsCreatedInfo(row){
   const espaceSelect = row.querySelector("select[name='espace_cnaps']");
   const createdInfo = row.querySelector('[data-cnaps-created-info]');
@@ -618,6 +673,7 @@ document.querySelectorAll("select[name='statut_cnaps']").forEach(select => {
     }).then(() => {
       applyCnapsClass(select);
       refreshDemandeIndicators();
+      applyRecapFilter();
     });
   });
 });
@@ -644,6 +700,7 @@ async function syncEspaceStatus(select){
     select.dataset.syncRunning = '0';
     applyEspaceClass(select);
     refreshDemandeIndicators();
+    applyRecapFilter();
   }
 }
 
@@ -699,6 +756,18 @@ document.querySelectorAll('[data-reminder-trigger]').forEach(button => {
 });
 
 refreshDemandeIndicators();
+applyRecapFilter();
+
+filterableRecapCards.forEach(card => {
+  const handleActivation = () => toggleRecapFilter(card.dataset.recapFilter || '');
+
+  card.addEventListener('click', handleActivation);
+  card.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    handleActivation();
+  });
+});
 
 document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   let timeoutId;
