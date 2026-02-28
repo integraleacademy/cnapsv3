@@ -18,6 +18,7 @@ import smtplib
 from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
 import json
+import re
 
 
 
@@ -84,6 +85,67 @@ MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
 
 
+MONTHS_FR = {
+    "janvier": 1,
+    "février": 2,
+    "fevrier": 2,
+    "mars": 3,
+    "avril": 4,
+    "mai": 5,
+    "juin": 6,
+    "juillet": 7,
+    "août": 8,
+    "aout": 8,
+    "septembre": 9,
+    "octobre": 10,
+    "novembre": 11,
+    "décembre": 12,
+    "decembre": 12,
+}
+
+
+def _parse_day_token(day_token):
+    raw = (day_token or "").strip().lower()
+    if raw in {"1er", "1"}:
+        return 1
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _session_start_date_sort_key(label):
+    text = (label or "").strip().lower()
+    text = re.sub(r"\s+", " ", text)
+
+    match = re.match(
+        r"^du\s+(\d{1,2}|1er)\s+([a-zéèêëàâäîïôöùûüç]+)(?:\s+(\d{4}))?\s+au\s+(\d{1,2}|1er)\s+([a-zéèêëàâäîïôöùûüç]+)\s+(\d{4})$",
+        text,
+    )
+    if not match:
+        return (9999, 12, 31, text)
+
+    start_day = _parse_day_token(match.group(1))
+    start_month = MONTHS_FR.get(match.group(2))
+    start_year = match.group(3)
+
+    end_day = _parse_day_token(match.group(4))
+    end_month = MONTHS_FR.get(match.group(5))
+    end_year = match.group(6)
+
+    if not start_day or not start_month or not end_day or not end_month or not end_year:
+        return (9999, 12, 31, text)
+
+    if start_year:
+        year = int(start_year)
+    else:
+        year = int(end_year)
+        if start_month > end_month:
+            year -= 1
+
+    return (year, start_month, start_day, text)
+
+
 def _now_france():
     return datetime.now(FRANCE_TZ)
 
@@ -133,6 +195,10 @@ def _load_formation_sessions(conn):
         session_label = (row["session_label"] or "").strip()
         if formation_type in sessions and session_label:
             sessions[formation_type].append(session_label)
+
+    for formation_type in sessions:
+        sessions[formation_type].sort(key=_session_start_date_sort_key)
+
     return sessions
 
 
