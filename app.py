@@ -1097,9 +1097,11 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
     ignored_example = None
 
     for row in rows:
-        action_normalized = _normalize_action_value(row["action_value"])
-        espace_normalized = _normalize_action_value(row["espace_cnaps_value"])
-        statut_normalized = _normalize_action_value(row["statut_cnaps_value"])
+        request_id, dossier_id, espace_cnaps_value, statut_cnaps_value, action_value = row
+
+        action_normalized = _normalize_action_value(action_value)
+        espace_normalized = _normalize_action_value(espace_cnaps_value)
+        statut_normalized = _normalize_action_value(statut_cnaps_value)
         statut_empty = statut_normalized in {"", "--"}
 
         is_demande = action_normalized == "demande_a_faire"
@@ -1110,21 +1112,21 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
             count += 1
             if counted_example is None:
                 counted_example = {
-                    "request_id": row["request_id"],
-                    "dossier_id": row["dossier_id"],
-                    "action_value": row["action_value"],
+                    "request_id": request_id,
+                    "dossier_id": dossier_id,
+                    "action_value": action_value,
                     "action_normalized": action_normalized,
-                    "espace_cnaps_value": row["espace_cnaps_value"],
-                    "statut_cnaps_value": row["statut_cnaps_value"],
+                    "espace_cnaps_value": espace_cnaps_value,
+                    "statut_cnaps_value": statut_cnaps_value,
                 }
         elif ignored_example is None:
             ignored_example = {
-                "request_id": row["request_id"],
-                "dossier_id": row["dossier_id"],
-                "action_value": row["action_value"],
+                "request_id": request_id,
+                "dossier_id": dossier_id,
+                "action_value": action_value,
                 "action_normalized": action_normalized,
-                "espace_cnaps_value": row["espace_cnaps_value"],
-                "statut_cnaps_value": row["statut_cnaps_value"],
+                "espace_cnaps_value": espace_cnaps_value,
+                "statut_cnaps_value": statut_cnaps_value,
             }
 
     debug_payload = None
