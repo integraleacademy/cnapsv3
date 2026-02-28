@@ -310,7 +310,7 @@
       <div class="recap-title">Nouveau dossier</div>
       <div class="recap-value" id="recapNouveau">{{ recap_ns.nouveau }}</div>
     </div>
-    <div class="recap-card recap-demande recap-filterable" role="button" tabindex="0" data-recap-filter="demande">
+    <div class="recap-card recap-demande {{ 'recap-zero' if recap_ns.demande == 0 else '' }}">
       <div class="recap-title">Demande à faire</div>
       <div class="recap-value" id="recapDemande">{{ recap_ns.demande }}</div>
     </div>
@@ -322,11 +322,11 @@
       <div class="recap-title">Documents non conformes</div>
       <div class="recap-value" id="recapDocumentsNonConformes">{{ recap_ns.non_conformes }}</div>
     </div>
-    <div class="recap-card recap-compte recap-filterable" role="button" tabindex="0" data-recap-filter="compte">
+    <div class="recap-card recap-compte {{ 'recap-zero' if recap_ns.compte == 0 else '' }}">
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
     </div>
-    <div class="recap-card recap-instruction recap-filterable" role="button" tabindex="0" data-recap-filter="instruction">
+    <div class="recap-card recap-instruction {{ 'recap-zero' if recap_ns.instruction == 0 else '' }}">
       <div class="recap-title">Instruction en cours</div>
       <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
     </div>
@@ -597,12 +597,20 @@ function refreshDemandeIndicators(){
   const recapCompte = document.getElementById('recapCompte');
   const recapInstruction = document.getElementById('recapInstruction');
 
-  if (recapDemande) recapDemande.textContent = demandeCount;
-  if (recapNouveau) recapNouveau.textContent = nouveauCount;
-  if (recapDocuments) recapDocuments.textContent = documentsCount;
-  if (recapDocumentsNonConformes) recapDocumentsNonConformes.textContent = nonConformesCount;
-  if (recapCompte) recapCompte.textContent = compteCount;
-  if (recapInstruction) recapInstruction.textContent = instructionCount;
+  function updateRecapValue(element, value) {
+    if (!element) return;
+    element.textContent = value;
+    const card = element.closest('.recap-card');
+    if (!card) return;
+    card.classList.toggle('recap-zero', Number(value) === 0);
+  }
+
+  updateRecapValue(recapDemande, demandeCount);
+  updateRecapValue(recapNouveau, nouveauCount);
+  updateRecapValue(recapDocuments, documentsCount);
+  updateRecapValue(recapDocumentsNonConformes, nonConformesCount);
+  updateRecapValue(recapCompte, compteCount);
+  updateRecapValue(recapInstruction, instructionCount);
 }
 
 function rowMatchesRecapFilter(row, filterKey){
