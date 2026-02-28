@@ -1111,6 +1111,7 @@ def summary_json():
                 return {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}, 200, headers
 
             instruction = 0
+            nouveau_dossier = 0
             demandes_a_faire = 0
             documents_a_controler = 0
             comptes_cnaps_a_creer = 0
@@ -1122,6 +1123,9 @@ def summary_json():
                 if _is_instruction_row(row):
                     instruction += 1
 
+                if _is_nouveau_dossier(row):
+                    nouveau_dossier += 1
+
                 if _is_demande_a_faire_summary(row):
                     demandes_a_faire += 1
 
@@ -1132,6 +1136,8 @@ def summary_json():
                     comptes_cnaps_a_creer += 1
 
         payload = {
+            "nouveau_dossier": nouveau_dossier,
+            "nouveaux_dossiers": nouveau_dossier,
             "demandes_a_faire": demandes_a_faire,
             "documents_a_controler": documents_a_controler,
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
@@ -1301,6 +1307,12 @@ def _extract_action_value(row: dict):
 
 def _is_instruction_row(row: dict) -> bool:
     return (row.get("statut_cnaps") or "").strip().upper() == "INSTRUCTION"
+
+
+def _is_nouveau_dossier(row: dict) -> bool:
+    formation = (row.get("formation") or "").strip()
+    session_date = (row.get("session_date") or "").strip()
+    return not (formation and session_date)
 
 
 def _has_documents_to_review(row: dict) -> bool:
