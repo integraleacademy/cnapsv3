@@ -348,6 +348,65 @@ def _load_summary_source_data(conn):
     return _load_a_traiter_dataset(conn), "_load_a_traiter_dataset"
 
 
+def _compute_cnaps_counters(rows):
+    """Calcule les compteurs CNAPS depuis la source unique /a-traiter."""
+    counters = {
+        "nouveau_dossier": 0,
+        "demandes_a_faire": 0,
+        "documents_a_controler": 0,
+        "comptes_cnaps_a_creer": 0,
+        "instruction": 0,
+    }
+    debug_examples = []
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+
+        statut_cnaps = (row.get("statut_cnaps") or "").strip()
+        espace_cnaps = (row.get("espace_cnaps") or "A créer").strip()
+        total_docs = int(row.get("total_docs") or 0)
+
+        contrib = {
+            "request_id": row.get("id"),
+            "statut_cnaps": statut_cnaps,
+            "espace_cnaps": espace_cnaps,
+            "total_docs": total_docs,
+            "contributes": {
+                "nouveau_dossier": False,
+                "demandes_a_faire": False,
+                "documents_a_controler": 0,
+                "comptes_cnaps_a_creer": False,
+            },
+        }
+
+        is_nouveau_dossier = statut_cnaps.upper() == "EN ATTENTE"
+        if is_nouveau_dossier:
+            counters["nouveau_dossier"] += 1
+            contrib["contributes"]["nouveau_dossier"] = True
+
+        is_demande_a_faire = statut_cnaps.upper() == "A TRAITER"
+        if is_demande_a_faire:
+            counters["demandes_a_faire"] += 1
+            contrib["contributes"]["demandes_a_faire"] = True
+
+        if total_docs > 0:
+            counters["documents_a_controler"] += total_docs
+            contrib["contributes"]["documents_a_controler"] = total_docs
+
+        if espace_cnaps == "A créer":
+            counters["comptes_cnaps_a_creer"] += 1
+            contrib["contributes"]["comptes_cnaps_a_creer"] = True
+
+        if statut_cnaps.upper() == "INSTRUCTION":
+            counters["instruction"] += 1
+
+        if len(debug_examples) < 3:
+            debug_examples.append(contrib)
+
+    return counters, debug_examples
+
+
 def _is_demande_a_faire(row):
     """Détection robuste de "Demande à faire" avec fallback métier /a-traiter."""
     action_norm = _normalize_action_value(
@@ -882,84 +941,32 @@ def summary_json():
         with sqlite3.connect(DB_NAME) as conn:
             data, source = _load_summary_source_data(conn)
 
-            debug_payload = {
-                "__debug_count": len(data) if isinstance(data, list) else 0,
+        if not isinstance(data, list):
+            return {
+                "error": "no_data_loaded",
                 "__debug_source": source,
-            }
+                "__debug_count": 0,
+            }, 200, headers
 
-            if DEBUG_SUMMARY:
-                dataset_type = type(data).__name__
-                print(
-                    f"[DEBUG_SUMMARY] source={source} "
-                    f"dataset_size={debug_payload['__debug_count']} type={dataset_type}"
-                )
-                if isinstance(data, list) and data and isinstance(data[0], dict):
-                    print(f"[DEBUG_SUMMARY] first_record_keys={list(data[0].keys())}")
-                    first_row = data[0]
-                    debug_key_terms = ["cnaps", "statut", "status", "action", "instruction", "doc", "compte"]
-                    debug_payload["__debug_keys"] = sorted(list(first_row.keys()))
-                    debug_payload["__debug_sample"] = {
-                        key: first_row.get(key)
-                        for key in sorted(first_row.keys())
-                        if any(term in key.lower() for term in debug_key_terms)
-                    }
-                    debug_demande_fields = [
-                        "action_cnaps",
-                        "cnaps_action",
-                        "espace_cnaps",
-                        "espace_cnaps_action",
-                        "action_espace_cnaps",
-                        "statut_cnaps",
-                        "cnaps_statut",
-                        "statut",
-                        "status",
-                        "instruction",
-                        "is_instruction",
-                        "en_instruction",
-                        "documents_a_controler",
-                        "en_attente",
-                        "compte_cnaps_a_creer",
-                    ]
-                    debug_payload["__debug_demande_fields"] = {
-                        field: first_row.get(field)
-                        for field in debug_demande_fields
-                    }
-
-            if not isinstance(data, list) or len(data) == 0:
-                error_payload = {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}
-                if DEBUG_SUMMARY:
-                    return error_payload, 200, headers
-                return {"error": "no_data_loaded", "__debug_source": source, "__debug_count": 0}, 200, headers
-
-            instruction = 0
-            demandes_a_faire = 0
-            documents_a_controler = 0
-            comptes_cnaps_a_creer = 0
-
-            for row in data:
-                if not isinstance(row, dict):
-                    continue
-
-                if _is_instruction_row(row):
-                    instruction += 1
-
-                if _is_demande_a_faire_summary(row):
-                    demandes_a_faire += 1
-
-                if _has_documents_to_review(row):
-                    documents_a_controler += 1
-
-                if _is_compte_cnaps_a_creer(row):
-                    comptes_cnaps_a_creer += 1
-
+        counters, debug_examples = _compute_cnaps_counters(data)
         payload = {
-            "demandes_a_faire": demandes_a_faire,
-            "documents_a_controler": documents_a_controler,
-            "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
-            "instruction": instruction,
+            "en_attente": counters["nouveau_dossier"],
+            "nouveau_dossier": counters["nouveau_dossier"],
+            "demandes_a_faire": counters["demandes_a_faire"],
+            "documents_a_controler": counters["documents_a_controler"],
+            "comptes_cnaps_a_creer": counters["comptes_cnaps_a_creer"],
+            "instruction": counters["instruction"],
+            "debug_counts": {
+                "nouveau_dossier": counters["nouveau_dossier"],
+                "demandes_a_faire": counters["demandes_a_faire"],
+                "documents_a_controler": counters["documents_a_controler"],
+                "comptes_cnaps_a_creer": counters["comptes_cnaps_a_creer"],
+            },
+            "debug_rules_version": "v1",
+            "debug_examples": debug_examples,
+            "__debug_source": source,
+            "__debug_count": len(data),
         }
-        if DEBUG_SUMMARY:
-            payload.update(debug_payload)
         return payload, 200, headers
     except Exception as exc:
         if DEBUG_SUMMARY:
@@ -1817,6 +1824,7 @@ def public_form():
 def a_traiter():
     with sqlite3.connect(DB_NAME) as conn:
         rows_dict = _load_a_traiter_dataset(conn)
+        counters, _ = _compute_cnaps_counters(rows_dict)
         _send_cnaps_reminders(conn, rows_dict)
         for row in rows_dict:
             timing = _compute_cnaps_timing(row)
@@ -1827,6 +1835,7 @@ def a_traiter():
     return render_template(
         "a_traiter.html",
         requests=rows_dict,
+        cnaps_counters=counters,
         formation_sessions=FORMATION_SESSIONS,
         dracar_auth_url=DRACAR_AUTH_URL,
     )

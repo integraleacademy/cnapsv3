@@ -251,26 +251,6 @@
 </head>
 <body>
 <div class="wrap">
-  {% set recap_ns = namespace(demande=0, nouveau=0, documents=0, compte=0, instruction=0) %}
-  {% for item in requests %}
-    {% set item_espace = (item.espace_cnaps or 'A créer')|trim %}
-    {% set item_cnaps = (item.statut_cnaps or '')|trim %}
-    {% set item_cnaps_empty = (item_cnaps == '' or item_cnaps == '--') %}
-    {% if not (item.formation and item.session_date) %}
-      {% set recap_ns.nouveau = recap_ns.nouveau + 1 %}
-    {% endif %}
-    {% if item_espace == 'Validé' and item_cnaps_empty %}
-      {% set recap_ns.demande = recap_ns.demande + 1 %}
-    {% endif %}
-    {% set recap_ns.documents = recap_ns.documents + (item.en_attente or 0) %}
-    {% if item_espace == 'A créer' %}
-      {% set recap_ns.compte = recap_ns.compte + 1 %}
-    {% endif %}
-    {% if item_cnaps == 'INSTRUCTION' %}
-      {% set recap_ns.instruction = recap_ns.instruction + 1 %}
-    {% endif %}
-  {% endfor %}
-
   <div class="page-head">
     <div class="brand">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
@@ -282,23 +262,23 @@
   <section class="recap-grid" aria-label="Tableau récapitulatif">
     <div class="recap-card recap-nouveau">
       <div class="recap-title">Nouveau dossier</div>
-      <div class="recap-value" id="recapNouveau">{{ recap_ns.nouveau }}</div>
+      <div class="recap-value" id="recapNouveau">{{ cnaps_counters.nouveau_dossier }}</div>
     </div>
     <div class="recap-card recap-demande">
       <div class="recap-title">Demande à faire</div>
-      <div class="recap-value" id="recapDemande">{{ recap_ns.demande }}</div>
+      <div class="recap-value" id="recapDemande">{{ cnaps_counters.demandes_a_faire }}</div>
     </div>
     <div class="recap-card recap-documents">
       <div class="recap-title">Documents à contrôler</div>
-      <div class="recap-value" id="recapDocuments">{{ recap_ns.documents }}</div>
+      <div class="recap-value" id="recapDocuments">{{ cnaps_counters.documents_a_controler }}</div>
     </div>
     <div class="recap-card recap-compte">
       <div class="recap-title">Compte à créer</div>
-      <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
+      <div class="recap-value" id="recapCompte">{{ cnaps_counters.comptes_cnaps_a_creer }}</div>
     </div>
     <div class="recap-card recap-instruction">
       <div class="recap-title">Instruction en cours</div>
-      <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
+      <div class="recap-value" id="recapInstruction">{{ cnaps_counters.instruction }}</div>
     </div>
   </section>
 
@@ -326,7 +306,7 @@
       {% set has_non_conformes = (r.non_conformes > 0) %}
       {% set has_pending_docs = (r.en_attente > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
-      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}">
+      <tr data-total-documents="{{ r.total_docs or 0 }}" data-statut-cnaps="{{ (r.statut_cnaps or '')|trim }}">
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
         <td>
@@ -511,15 +491,9 @@ function normalizeValue(value){
 }
 
 function shouldShowDemande(row){
-  const espaceSelect = row.querySelector("select[name='espace_cnaps']");
   const statutSelect = row.querySelector("select[name='statut_cnaps']");
-  if (!espaceSelect || !statutSelect) return false;
-
-  const espaceValue = normalizeValue(espaceSelect.value);
-  const statutValue = (statutSelect.value || '').toString().trim();
-  const isStatutEmpty = statutValue === '' || statutValue === '--';
-
-  return espaceValue === 'valide' && isStatutEmpty;
+  if (!statutSelect) return false;
+  return (statutSelect.value || '').toString().trim().toUpperCase() === 'A TRAITER';
 }
 
 function refreshDemandeIndicators(){
@@ -541,11 +515,12 @@ function refreshDemandeIndicators(){
     }
     if (visible) demandeCount += 1;
 
-    if (row.dataset.isNewDossier === '1') {
+    const statutValue = (statutSelect ? (statutSelect.value || '').toString().trim().toUpperCase() : (row.dataset.statutCnaps || '').toString().trim().toUpperCase());
+    if (statutValue === 'EN ATTENTE') {
       nouveauCount += 1;
     }
 
-    documentsCount += Number(row.dataset.pendingDocuments || 0);
+    documentsCount += Number(row.dataset.totalDocuments || 0);
 
     if (espaceSelect && normalizeValue(espaceSelect.value) === 'a creer') {
       compteCount += 1;
