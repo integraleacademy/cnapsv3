@@ -156,6 +156,11 @@
     .recap-compte { background: linear-gradient(135deg, #ef4444, #dc2626); }
     .recap-instruction { background: linear-gradient(135deg, #14b8a6, #0f766e); }
 
+    .recap-card.recap-zero {
+      background: linear-gradient(135deg, #d1d5db, #9ca3af);
+      box-shadow: none;
+    }
+
     .demande-hidden {
       display: none !important;
     }
@@ -282,27 +287,27 @@
   </div>
 
   <section class="recap-grid" aria-label="Tableau récapitulatif">
-    <div class="recap-card recap-nouveau">
+    <div class="recap-card recap-nouveau {{ 'recap-zero' if recap_ns.nouveau == 0 else '' }}">
       <div class="recap-title">Nouveau dossier</div>
       <div class="recap-value" id="recapNouveau">{{ recap_ns.nouveau }}</div>
     </div>
-    <div class="recap-card recap-demande">
+    <div class="recap-card recap-demande {{ 'recap-zero' if recap_ns.demande == 0 else '' }}">
       <div class="recap-title">Demande à faire</div>
       <div class="recap-value" id="recapDemande">{{ recap_ns.demande }}</div>
     </div>
-    <div class="recap-card recap-documents">
+    <div class="recap-card recap-documents {{ 'recap-zero' if recap_ns.documents == 0 else '' }}">
       <div class="recap-title">Documents à contrôler</div>
       <div class="recap-value" id="recapDocuments">{{ recap_ns.documents }}</div>
     </div>
-    <div class="recap-card recap-non-conformes">
+    <div class="recap-card recap-non-conformes {{ 'recap-zero' if recap_ns.non_conformes == 0 else '' }}">
       <div class="recap-title">Documents non conformes</div>
       <div class="recap-value" id="recapDocumentsNonConformes">{{ recap_ns.non_conformes }}</div>
     </div>
-    <div class="recap-card recap-compte">
+    <div class="recap-card recap-compte {{ 'recap-zero' if recap_ns.compte == 0 else '' }}">
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
     </div>
-    <div class="recap-card recap-instruction">
+    <div class="recap-card recap-instruction {{ 'recap-zero' if recap_ns.instruction == 0 else '' }}">
       <div class="recap-title">Instruction en cours</div>
       <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
     </div>
