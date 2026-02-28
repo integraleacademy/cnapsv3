@@ -1121,16 +1121,23 @@ def _extract_action_value(row: dict):
 
 
 def _is_instruction_row(row: dict) -> bool:
-    statut_candidates = ["statut_cnaps", "cnaps_statut", "statut", "status", "instruction_status"]
-    statut_value = _normalize_summary_key(_first_present_value(row, statut_candidates))
-    if statut_value in {"instruction", "en_instruction", "in_instruction", "instr"}:
-        return True
-
-    boolean_candidates = ["instruction", "is_instruction", "en_instruction", "cnaps_instruction"]
-    return any(_coerce_bool(row.get(field)) for field in boolean_candidates if field in row)
+    return (row.get("statut_cnaps") or "").strip().upper() == "INSTRUCTION"
 
 
 def _has_documents_to_review(row: dict) -> bool:
+    total_docs = row.get("total_docs")
+    non_conformes = row.get("non_conformes")
+    if total_docs is not None or non_conformes is not None:
+        try:
+            total_docs_value = int(total_docs or 0)
+        except (TypeError, ValueError):
+            total_docs_value = 0
+        try:
+            non_conformes_value = int(non_conformes or 0)
+        except (TypeError, ValueError):
+            non_conformes_value = 0
+        return total_docs_value == 0 or non_conformes_value > 0
+
     docs_count_candidates = ["en_attente", "documents_en_attente", "docs_en_attente", "pending_docs"]
     for field in docs_count_candidates:
         if field not in row:
@@ -1145,31 +1152,11 @@ def _has_documents_to_review(row: dict) -> bool:
 
 
 def _is_compte_cnaps_a_creer(row: dict) -> bool:
-    espace_candidates = ["espace_cnaps", "cnaps_espace", "espace_cnaps_statut", "statut_espace_cnaps"]
-    espace_norm = _normalize_summary_key(_first_present_value(row, espace_candidates))
-    if espace_norm in {"a_creer", "acreer", "a_cree", "a_faire"}:
-        return True
-
-    bool_candidates = ["compte_cnaps_a_creer", "cnaps_account_to_create", "has_compte_cnaps_a_creer"]
-    return any(_coerce_bool(row.get(field)) for field in bool_candidates if field in row)
+    return (row.get("espace_cnaps") or "").strip() == "A créer"
 
 
 def _is_demande_a_faire_summary(row: dict) -> bool:
-    action_norm = _normalize_summary_key(_extract_action_value(row))
-    if action_norm in {
-        "demande_a_faire",
-        "demandes_a_faire",
-        "demandeafaire",
-        "afaire",
-        "a_faire",
-        "demande",
-    }:
-        return True
-
-    # Fallback pour rester aligné avec la logique visuelle de /a-traiter.
-    espace_norm = _normalize_summary_key(row.get("espace_cnaps"))
-    statut_norm = _normalize_summary_key(row.get("statut_cnaps"))
-    return espace_norm == "valide" and statut_norm in {"", "__"}
+    return (row.get("statut_cnaps") or "").strip().upper() == "A TRAITER"
 
 
 def _table_columns(conn, table_name: str):
