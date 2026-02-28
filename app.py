@@ -78,6 +78,8 @@ FORMATION_SESSIONS = {
 }
 
 DB_NAME = "/mnt/data/cnaps.db"
+DEBUG_SUMMARY = os.getenv("DEBUG_SUMMARY", "0").strip() == "1"
+SUMMARY_DATA_JSON_PATHS = ["/data/data.json", "data.json"]
 UPLOAD_DIR = "/mnt/data/uploads"
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
@@ -306,6 +308,57 @@ def _request_phone_select_expr(conn):
     if has_dossier_phone:
         return "NULLIF(d.telephone, '')"
     return "NULL"
+
+
+def _load_a_traiter_dataset(conn):
+    """Source de vérité partagée avec /a-traiter."""
+    conn.row_factory = sqlite3.Row
+    telephone_expr = _request_phone_select_expr(conn)
+    rows = conn.execute(
+        f"""
+        SELECT
+            pr.*,
+            d.statut_cnaps,
+            d.commentaire,
+            {telephone_expr} AS telephone,
+            COALESCE(doc_stats.total_docs, 0) AS total_docs,
+            COALESCE(doc_stats.conformes, 0) AS conformes,
+            COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
+            COALESCE(doc_stats.en_attente, 0) AS en_attente
+        FROM public_requests pr
+        LEFT JOIN dossiers d ON d.id = pr.dossier_id
+        LEFT JOIN (
+            SELECT
+                request_id,
+                COUNT(*) AS total_docs,
+                SUM(CASE WHEN is_conforme = 1 THEN 1 ELSE 0 END) AS conformes,
+                SUM(CASE WHEN is_conforme = 0 THEN 1 ELSE 0 END) AS non_conformes,
+                SUM(CASE WHEN is_conforme IS NULL THEN 1 ELSE 0 END) AS en_attente
+            FROM request_documents
+            WHERE is_active = 1
+            GROUP BY request_id
+        ) doc_stats ON doc_stats.request_id = pr.id
+        ORDER BY pr.id DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _load_summary_source_data(conn):
+    """Charge la même source que /a-traiter, avec fallback JSON Render."""
+    try:
+        data = _load_a_traiter_dataset(conn)
+        if data:
+            return data, "sqlite:/mnt/data/cnaps.db::a_traiter_query"
+    except sqlite3.OperationalError:
+        pass
+
+    for json_path in SUMMARY_DATA_JSON_PATHS:
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f), f"file:{json_path}"
+
+    return [], "sqlite:/mnt/data/cnaps.db::a_traiter_query"
 
 
 def _new_validation_token():
@@ -824,71 +877,55 @@ def summary_json():
         "Access-Control-Allow-Origin": "*",
     }
 
-    def _safe_count(conn, query):
-        try:
-            return int(conn.execute(query).fetchone()[0] or 0)
-        except (sqlite3.OperationalError, TypeError, ValueError):
-            return 0
-
     try:
         with sqlite3.connect(DB_NAME) as conn:
-            espace_cnaps_normalized_expr = """
-                LOWER(
-                    TRIM(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        REPLACE(
-                                            REPLACE(
-                                                REPLACE(COALESCE(pr.espace_cnaps, 'A créer'), char(160), ' '),
-                                                char(9),
-                                                ' '
-                                            ),
-                                            char(10),
-                                            ' '
-                                        ),
-                                        char(13),
-                                        ' '
-                                    ),
-                                    'é',
-                                    'e'
-                                ),
-                                'è',
-                                'e'
-                            ),
-                            'ê',
-                            'e'
-                        )
-                    )
-                )
-            """
-            debug_summary = (request.args.get("debug") or "").strip().lower() in {"1", "true", "yes"}
-            demandes_a_faire, demandes_debug = _compute_demandes_a_faire(conn, debug=debug_summary)
+            data, source = _load_summary_source_data(conn)
 
-            documents_a_controler = _safe_count(
-                conn,
-                """
-                SELECT COUNT(*)
-                FROM request_documents rd
-                WHERE rd.is_active = 1
-                  AND rd.is_conforme IS NULL
-                """,
-            )
+            if DEBUG_SUMMARY:
+                dataset_type = type(data).__name__
+                print(f"[DEBUG_SUMMARY] source={source} dataset_size={len(data) if hasattr(data, '__len__') else 'n/a'} type={dataset_type}")
+                if isinstance(data, list) and data and isinstance(data[0], dict):
+                    print(f"[DEBUG_SUMMARY] first_record_keys={list(data[0].keys())}")
 
-            comptes_cnaps_a_creer = _safe_count(
-                conn,
-                f"""
-                SELECT COUNT(*)
-                FROM public_requests pr
-                WHERE {espace_cnaps_normalized_expr} = 'a creer'
-                """,
-            )
+            if not data:
+                return {
+                    "error": "no_data_loaded",
+                    "count": 0,
+                    "source": source,
+                }, 200, headers
 
-            instruction = _safe_count(
-                conn,
-                "SELECT COUNT(*) FROM dossiers WHERE statut_cnaps = 'INSTRUCTION'",
-            )
+            if not isinstance(data, list):
+                return {
+                    "error": "no_data_loaded",
+                    "count": 0,
+                    "source": source,
+                }, 200, headers
+
+            instruction = 0
+            demandes_a_faire = 0
+            documents_a_controler = 0
+            comptes_cnaps_a_creer = 0
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+
+                statut_norm = _normalize_action_value(row.get("statut_cnaps"))
+                espace_norm = _normalize_action_value(row.get("espace_cnaps"))
+                action_norm = _normalize_action_value(row.get("action_cnaps") or row.get("cnaps_action") or row.get("action"))
+
+                if statut_norm == "instruction":
+                    instruction += 1
+
+                # Même logique métier que l'existant: action explicite OU fallback Validé + statut vide.
+                if action_norm == "demande_a_faire" or (espace_norm == "valide" and statut_norm in {"", "--"}):
+                    demandes_a_faire += 1
+
+                if int(row.get("en_attente") or 0) > 0:
+                    documents_a_controler += 1
+
+                if espace_norm == "a creer":
+                    comptes_cnaps_a_creer += 1
 
         payload = {
             "demandes_a_faire": demandes_a_faire,
@@ -896,16 +933,14 @@ def summary_json():
             "comptes_cnaps_a_creer": comptes_cnaps_a_creer,
             "instruction": instruction,
         }
-        if debug_summary:
-            payload["debug_demandes_a_faire"] = demandes_debug
-
         return payload, 200, headers
-    except Exception:
+    except Exception as exc:
+        if DEBUG_SUMMARY:
+            print(f"[DEBUG_SUMMARY] summary_json error={exc}")
         return {
-            "demandes_a_faire": 0,
-            "documents_a_controler": 0,
-            "comptes_cnaps_a_creer": 0,
-            "instruction": 0,
+            "error": "no_data_loaded",
+            "count": 0,
+            "source": "sqlite:/mnt/data/cnaps.db::a_traiter_query",
         }, 200, headers
 
 @app.route('/notifications_espace_cnaps_a_valider.json')
@@ -1696,37 +1731,7 @@ def public_form():
 @login_required
 def a_traiter():
     with sqlite3.connect(DB_NAME) as conn:
-        conn.row_factory = sqlite3.Row
-        telephone_expr = _request_phone_select_expr(conn)
-        rows = conn.execute(
-            f"""
-            SELECT
-                pr.*,
-                d.statut_cnaps,
-                d.commentaire,
-                {telephone_expr} AS telephone,
-                COALESCE(doc_stats.total_docs, 0) AS total_docs,
-                COALESCE(doc_stats.conformes, 0) AS conformes,
-                COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
-                COALESCE(doc_stats.en_attente, 0) AS en_attente
-            FROM public_requests pr
-            LEFT JOIN dossiers d ON d.id = pr.dossier_id
-            LEFT JOIN (
-                SELECT
-                    request_id,
-                    COUNT(*) AS total_docs,
-                    SUM(CASE WHEN is_conforme = 1 THEN 1 ELSE 0 END) AS conformes,
-                    SUM(CASE WHEN is_conforme = 0 THEN 1 ELSE 0 END) AS non_conformes,
-                    SUM(CASE WHEN is_conforme IS NULL THEN 1 ELSE 0 END) AS en_attente
-                FROM request_documents
-                WHERE is_active = 1
-                GROUP BY request_id
-            ) doc_stats ON doc_stats.request_id = pr.id
-            ORDER BY pr.id DESC
-            """
-        ).fetchall()
-
-        rows_dict = [dict(row) for row in rows]
+        rows_dict = _load_a_traiter_dataset(conn)
         _send_cnaps_reminders(conn, rows_dict)
         for row in rows_dict:
             timing = _compute_cnaps_timing(row)
