@@ -1125,30 +1125,10 @@ def _is_instruction_row(row: dict) -> bool:
 
 
 def _has_documents_to_review(row: dict) -> bool:
-    total_docs = row.get("total_docs")
-    non_conformes = row.get("non_conformes")
-    if total_docs is not None or non_conformes is not None:
-        try:
-            total_docs_value = int(total_docs or 0)
-        except (TypeError, ValueError):
-            total_docs_value = 0
-        try:
-            non_conformes_value = int(non_conformes or 0)
-        except (TypeError, ValueError):
-            non_conformes_value = 0
-        return total_docs_value == 0 or non_conformes_value > 0
-
-    docs_count_candidates = ["en_attente", "documents_en_attente", "docs_en_attente", "pending_docs"]
-    for field in docs_count_candidates:
-        if field not in row:
-            continue
-        try:
-            return int(row.get(field) or 0) > 0
-        except (TypeError, ValueError):
-            return _coerce_bool(row.get(field))
-
-    docs_bool_candidates = ["documents_a_controler", "has_pending_docs", "pending_docs_flag"]
-    return any(_coerce_bool(row.get(field)) for field in docs_bool_candidates if field in row)
+    try:
+        return int(row.get("en_attente") or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def _is_compte_cnaps_a_creer(row: dict) -> bool:
@@ -1156,7 +1136,9 @@ def _is_compte_cnaps_a_creer(row: dict) -> bool:
 
 
 def _is_demande_a_faire_summary(row: dict) -> bool:
-    return (row.get("statut_cnaps") or "").strip().upper() == "A TRAITER"
+    espace_cnaps = (row.get("espace_cnaps") or "").strip()
+    statut_cnaps = (row.get("statut_cnaps") or "").strip()
+    return espace_cnaps == "Validé" and (statut_cnaps == "" or statut_cnaps == "--")
 
 
 def _table_columns(conn, table_name: str):
