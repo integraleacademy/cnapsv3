@@ -276,7 +276,7 @@
 </head>
 <body>
 <div class="wrap">
-  {% set recap_ns = namespace(demande=0, nouveau=0, documents=0, non_conformes=0, compte=0, instruction=0) %}
+  {% set recap_ns = namespace(demande=0, nouveau=0, documents=0, non_conformes=0, compte=0, compte_en_attente_validation=0, instruction=0) %}
   {% for item in requests %}
     {% set item_espace = (item.espace_cnaps or 'A créer')|trim %}
     {% set item_cnaps = (item.statut_cnaps or '')|trim %}
@@ -291,6 +291,9 @@
     {% set recap_ns.non_conformes = recap_ns.non_conformes + (item.notified_expected or 0) %}
     {% if item_espace == 'A créer' %}
       {% set recap_ns.compte = recap_ns.compte + 1 %}
+    {% endif %}
+    {% if item_espace == 'Créé' %}
+      {% set recap_ns.compte_en_attente_validation = recap_ns.compte_en_attente_validation + 1 %}
     {% endif %}
     {% if item_cnaps == 'INSTRUCTION' %}
       {% set recap_ns.instruction = recap_ns.instruction + 1 %}
@@ -325,6 +328,10 @@
     <div class="recap-card recap-compte recap-filterable" role="button" tabindex="0" data-recap-filter="compte">
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
+    </div>
+    <div class="recap-card recap-compte {{ 'recap-zero' if recap_ns.compte_en_attente_validation == 0 else '' }}">
+      <div class="recap-title">En attente de validation</div>
+      <div class="recap-value" id="recapCompteEnAttenteValidation">{{ recap_ns.compte_en_attente_validation }}</div>
     </div>
     <div class="recap-card recap-instruction recap-filterable" role="button" tabindex="0" data-recap-filter="instruction">
       <div class="recap-title">Instruction en cours</div>
@@ -561,6 +568,7 @@ function refreshDemandeIndicators(){
   let documentsCount = 0;
   let nonConformesCount = 0;
   let compteCount = 0;
+  let compteEnAttenteValidationCount = 0;
   let instructionCount = 0;
 
   rows.forEach(row => {
@@ -585,6 +593,10 @@ function refreshDemandeIndicators(){
       compteCount += 1;
     }
 
+    if (espaceSelect && normalizeValue(espaceSelect.value) === 'cree') {
+      compteEnAttenteValidationCount += 1;
+    }
+
     if (statutSelect && (statutSelect.value || '').toString().trim() === 'INSTRUCTION') {
       instructionCount += 1;
     }
@@ -595,6 +607,7 @@ function refreshDemandeIndicators(){
   const recapDocuments = document.getElementById('recapDocuments');
   const recapDocumentsNonConformes = document.getElementById('recapDocumentsNonConformes');
   const recapCompte = document.getElementById('recapCompte');
+  const recapCompteEnAttenteValidation = document.getElementById('recapCompteEnAttenteValidation');
   const recapInstruction = document.getElementById('recapInstruction');
 
   if (recapDemande) recapDemande.textContent = demandeCount;
@@ -602,6 +615,7 @@ function refreshDemandeIndicators(){
   if (recapDocuments) recapDocuments.textContent = documentsCount;
   if (recapDocumentsNonConformes) recapDocumentsNonConformes.textContent = nonConformesCount;
   if (recapCompte) recapCompte.textContent = compteCount;
+  if (recapCompteEnAttenteValidation) recapCompteEnAttenteValidation.textContent = compteEnAttenteValidationCount;
   if (recapInstruction) recapInstruction.textContent = instructionCount;
 }
 
