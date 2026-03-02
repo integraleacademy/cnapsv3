@@ -325,7 +325,7 @@
       <div class="recap-title">Documents non conformes</div>
       <div class="recap-value" id="recapDocumentsNonConformes">{{ recap_ns.non_conformes }}</div>
     </div>
-    <div class="recap-card recap-compte recap-filterable" role="button" tabindex="0" data-recap-filter="compte">
+    <div class="recap-card recap-compte recap-filterable {{ 'recap-zero' if recap_ns.compte == 0 else '' }}" role="button" tabindex="0" data-recap-filter="compte">
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
     </div>
