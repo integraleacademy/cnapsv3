@@ -1899,6 +1899,34 @@ def _file_size_bytes(file_storage):
     return size
 
 
+def _find_recent_duplicate_request(conn, nom, prenom, email, date_naissance, telephone):
+    """Retourne une demande publique existante qui semble être un doublon utilisateur."""
+    conn.row_factory = sqlite3.Row
+    return conn.execute(
+        """
+        SELECT
+            pr.id,
+            pr.created_at,
+            pr.dossier_id,
+            d.statut_cnaps
+        FROM public_requests pr
+        LEFT JOIN dossiers d ON d.id = pr.dossier_id
+        WHERE LOWER(TRIM(pr.nom)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(pr.prenom)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(pr.email)) = LOWER(TRIM(?))
+          AND TRIM(pr.date_naissance) = TRIM(?)
+          AND REPLACE(REPLACE(TRIM(COALESCE(pr.telephone, '')), ' ', ''), '.', '') = REPLACE(REPLACE(TRIM(?), ' ', ''), '.', '')
+          AND (
+              d.statut_cnaps IS NULL
+              OR d.statut_cnaps NOT IN ('ACCEPTÉ', 'REFUSÉ', 'REFUSE', 'ANNULE')
+          )
+        ORDER BY pr.id DESC
+        LIMIT 1
+        """,
+        (nom, prenom, email, date_naissance, telephone),
+    ).fetchone()
+
+
 @app.route("/public-form", methods=["GET", "POST"])
 def public_form():
     def _render_with_error(message: str):
@@ -1952,6 +1980,27 @@ def public_form():
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
+        duplicate_request = _find_recent_duplicate_request(
+            conn,
+            nom,
+            prenom,
+            email,
+            date_naissance,
+            telephone,
+        )
+        if duplicate_request:
+            app.logger.info(
+                "Soumission doublon ignorée nom=%r prenom=%r email=%r request_id=%s dossier_id=%s",
+                nom,
+                prenom,
+                email,
+                duplicate_request["id"],
+                duplicate_request["dossier_id"],
+            )
+            return _render_with_error(
+                "Un dossier identique a déjà été envoyé. Vérifiez vos emails ou contactez le centre si besoin."
+            )
+
         if _table_has_column(conn, "dossiers", "telephone"):
             cur = conn.execute(
                 """
