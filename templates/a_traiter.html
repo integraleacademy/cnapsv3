@@ -610,13 +610,22 @@ function refreshDemandeIndicators(){
   const recapCompteEnAttenteValidation = document.getElementById('recapCompteEnAttenteValidation');
   const recapInstruction = document.getElementById('recapInstruction');
 
-  if (recapDemande) recapDemande.textContent = demandeCount;
-  if (recapNouveau) recapNouveau.textContent = nouveauCount;
-  if (recapDocuments) recapDocuments.textContent = documentsCount;
-  if (recapDocumentsNonConformes) recapDocumentsNonConformes.textContent = nonConformesCount;
-  if (recapCompte) recapCompte.textContent = compteCount;
-  if (recapCompteEnAttenteValidation) recapCompteEnAttenteValidation.textContent = compteEnAttenteValidationCount;
-  if (recapInstruction) recapInstruction.textContent = instructionCount;
+  function setRecapValue(recapElement, value){
+    if (!recapElement) return;
+    recapElement.textContent = value;
+    const card = recapElement.closest('.recap-card');
+    if (card) {
+      card.classList.toggle('recap-zero', Number(value) === 0);
+    }
+  }
+
+  setRecapValue(recapDemande, demandeCount);
+  setRecapValue(recapNouveau, nouveauCount);
+  setRecapValue(recapDocuments, documentsCount);
+  setRecapValue(recapDocumentsNonConformes, nonConformesCount);
+  setRecapValue(recapCompte, compteCount);
+  setRecapValue(recapCompteEnAttenteValidation, compteEnAttenteValidationCount);
+  setRecapValue(recapInstruction, instructionCount);
 }
 
 function rowMatchesRecapFilter(row, filterKey){
