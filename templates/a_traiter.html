@@ -329,7 +329,7 @@
       <div class="recap-title">Compte à créer</div>
       <div class="recap-value" id="recapCompte">{{ recap_ns.compte }}</div>
     </div>
-    <div class="recap-card recap-compte {{ 'recap-zero' if recap_ns.compte_en_attente_validation == 0 else '' }}">
+    <div class="recap-card recap-compte recap-filterable {{ 'recap-zero' if recap_ns.compte_en_attente_validation == 0 else '' }}" role="button" tabindex="0" data-recap-filter="compte-en-attente-validation">
       <div class="recap-title">En attente de validation</div>
       <div class="recap-value" id="recapCompteEnAttenteValidation">{{ recap_ns.compte_en_attente_validation }}</div>
     </div>
@@ -636,6 +636,10 @@ function rowMatchesRecapFilter(row, filterKey){
 
   if (filterKey === 'compte') {
     return Boolean(espaceSelect) && normalizeValue(espaceSelect.value) === 'a creer';
+  }
+
+  if (filterKey === 'compte-en-attente-validation') {
+    return Boolean(espaceSelect) && normalizeValue(espaceSelect.value) === 'cree';
   }
 
   if (filterKey === 'instruction') {
