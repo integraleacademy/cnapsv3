@@ -196,6 +196,7 @@
 
     .commentaire-input,
     .telephone-input,
+    .dracar-input,
     .cnaps-select {
       width: 100%;
       padding: 8px;
@@ -403,21 +404,40 @@
           {% endif %}
         </td>
         <td>
+          {% set dracar_password = (r.dracar_password or ((r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@')) %}
           <div style="font-size:13px;line-height:1.5;">
-            <div><strong>Login :</strong> {{ r.email }}</div>
-            {% set dracar_password = (r.nom[:1]|upper) ~ (r.nom[1:]|lower) ~ (r.date_naissance|replace('/','')) ~ '@' %}
-            <div><strong>Mot de passe :</strong> <span data-dracar-password>{{ dracar_password }}</span></div>
+            <div style="margin-bottom:6px;">
+              <strong>Login :</strong>
+              <input
+                type="email"
+                class="dracar-input"
+                data-dracar-email
+                data-request-id="{{ r.id }}"
+                value="{{ r.email or '' }}"
+                placeholder="email@exemple.com"
+              >
+            </div>
+            <div>
+              <strong>Mot de passe :</strong>
+              <input
+                type="text"
+                class="dracar-input"
+                data-dracar-password
+                data-request-id="{{ r.id }}"
+                value="{{ dracar_password }}"
+                placeholder="Mot de passe DRACAR"
+              >
+            </div>
             <a
               href="{{ dracar_auth_url }}"
               target="_blank"
               rel="noopener"
               class="dracar-link"
-              data-login="{{ r.email }}"
-              data-password="{{ dracar_password }}"
+              data-request-id="{{ r.id }}"
             >
               Lien Espace DRACAR
             </a>
-            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Le mot de passe est copié automatiquement au clic.</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Sauvegarde automatique du login/mot de passe + copie du mot de passe au clic.</div>
           </div>
         </td>
         <td>
@@ -864,12 +884,59 @@ document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => 
   input.addEventListener('blur', () => save({ showAlertOnError: true }));
 });
 
+document.querySelectorAll('[data-dracar-email][data-request-id], [data-dracar-password][data-request-id]').forEach(input => {
+  let timeoutId;
+
+  const getEmailInput = () => document.querySelector(`[data-dracar-email][data-request-id="${input.dataset.requestId}"]`);
+  const getPasswordInput = () => document.querySelector(`[data-dracar-password][data-request-id="${input.dataset.requestId}"]`);
+
+  const save = ({ showAlertOnError = true } = {}) => {
+    const requestId = input.dataset.requestId;
+    if (!requestId) return;
+
+    const emailInput = getEmailInput();
+    const passwordInput = getPasswordInput();
+    if (!emailInput || !passwordInput) return;
+
+    const email = (emailInput.value || '').trim().toLowerCase();
+    const password = (passwordInput.value || '').trim();
+
+    fetch(`/a-traiter/${requestId}/dracar-credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    }).then(async (response) => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Erreur de sauvegarde du login/mot de passe');
+      }
+
+      emailInput.value = email;
+      passwordInput.value = password;
+    }).catch((error) => {
+      if (showAlertOnError) {
+        window.alert(error.message || 'Impossible de sauvegarder le login/mot de passe');
+      }
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
+  });
+
+  input.addEventListener('blur', () => save({ showAlertOnError: true }));
+});
+
 document.querySelectorAll('.dracar-link').forEach(link => {
   link.addEventListener('click', (event) => {
     event.preventDefault();
 
-    const login = link.dataset.login || '';
-    const password = link.dataset.password || '';
+    const requestId = link.dataset.requestId || '';
+    const emailInput = requestId ? document.querySelector(`[data-dracar-email][data-request-id="${requestId}"]`) : null;
+    const passwordInput = requestId ? document.querySelector(`[data-dracar-password][data-request-id="${requestId}"]`) : null;
+    const login = (emailInput?.value || '').trim().toLowerCase();
+    const password = (passwordInput?.value || '').trim();
     const rawUrl = link.getAttribute('href');
     if (!rawUrl) return;
 

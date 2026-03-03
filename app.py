@@ -287,6 +287,8 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN espace_cnaps_created_sms_sent_at TEXT")
         if "telephone" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN telephone TEXT")
+        if "dracar_password" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN dracar_password TEXT")
 
         if _table_has_column(conn, "dossiers", "telephone"):
             conn.execute(
@@ -736,6 +738,45 @@ def update_request_telephone(request_id):
     return jsonify({"ok": True})
 
 
+@app.route("/a-traiter/<int:request_id>/dracar-credentials", methods=["POST"])
+@login_required
+def update_request_dracar_credentials(request_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").strip().lower()
+        password = (data.get("password") or "").strip()
+    else:
+        email = (request.form.get("email") or "").strip().lower()
+        password = (request.form.get("password") or "").strip()
+
+    if not email:
+        return jsonify({"ok": False, "error": "Le login est obligatoire"}), 400
+    if "@" not in email:
+        return jsonify({"ok": False, "error": "Email invalide"}), 400
+    if not password:
+        return jsonify({"ok": False, "error": "Le mot de passe est obligatoire"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id FROM public_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        conn.execute(
+            """
+            UPDATE public_requests
+            SET email = ?, dracar_password = ?, updated_at = datetime('now','localtime')
+            WHERE id = ?
+            """,
+            (email, password, request_id),
+        )
+
+    return jsonify({"ok": True, "email": email, "password": password})
+
+
 @app.route("/statut/<int:id>/<string:new_status>", methods=["POST"])
 @login_required
 def update_statut(id, new_status):
@@ -756,6 +797,7 @@ def update_statut_cnaps(id):
             dossier = conn.execute(
                 """
                 SELECT d.*, pr.email AS request_email, pr.date_naissance
+                     , pr.dracar_password AS request_dracar_password
                 FROM dossiers d
                 LEFT JOIN public_requests pr ON pr.dossier_id = d.id
                 WHERE d.id = ?
@@ -777,7 +819,7 @@ def update_statut_cnaps(id):
                     prenom=dossier["prenom"],
                     formation_name=formation_name,
                     login=email,
-                    password=_dracar_password(dossier["nom"], dossier["date_naissance"]),
+                    password=(dossier["request_dracar_password"] or "").strip() or _dracar_password(dossier["nom"], dossier["date_naissance"]),
                     dracar_app_url=DRACAR_APP_URL,
                 )
                 _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
@@ -790,6 +832,7 @@ def update_statut_cnaps(id):
         dossier = conn.execute(
             """
             SELECT d.*, pr.email AS request_email, pr.date_naissance
+                 , pr.dracar_password AS request_dracar_password
             FROM dossiers d
             LEFT JOIN public_requests pr ON pr.dossier_id = d.id
             WHERE d.id = ?
@@ -811,7 +854,7 @@ def update_statut_cnaps(id):
                 prenom=dossier["prenom"],
                 formation_name=formation_name,
                 login=email,
-                password=_dracar_password(dossier["nom"], dossier["date_naissance"]),
+                password=(dossier["request_dracar_password"] or "").strip() or _dracar_password(dossier["nom"], dossier["date_naissance"]),
                 dracar_app_url=DRACAR_APP_URL,
             )
             _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
@@ -1173,6 +1216,7 @@ def notifications_espace_cnaps_a_valider_json():
                     pr.prenom,
                     pr.email,
                     pr.date_naissance,
+                    pr.dracar_password,
                     pr.telephone,
                     pr.espace_cnaps,
                     pr.updated_at
@@ -1191,7 +1235,7 @@ def notifications_espace_cnaps_a_valider_json():
                 "prenom": row["prenom"],
                 "telephone": row["telephone"],
                 "login": (row["email"] or "").strip().lower(),
-                "password": _dracar_password(row["nom"], row["date_naissance"]),
+                "password": (row["dracar_password"] or "").strip() or _dracar_password(row["nom"], row["date_naissance"]),
                 "espace_dracar_url": DRACAR_AUTH_URL,
                 "espace_cnaps": row["espace_cnaps"],
                 "updated_at": row["updated_at"],
@@ -1200,7 +1244,7 @@ def notifications_espace_cnaps_a_valider_json():
                     "Le compte CNAPS de cette personne a été créé. "
                     "Il faut l'appeler pour lui dire de valider son compte et lui communiquer : "
                     f"Login : {(row['email'] or '').strip().lower()} | "
-                    f"Mot de passe : {_dracar_password(row['nom'], row['date_naissance'])} | "
+                    f"Mot de passe : {((row['dracar_password'] or '').strip() or _dracar_password(row['nom'], row['date_naissance']))} | "
                     f"Téléphone : {row['telephone'] or 'Non renseigné'} | "
                     f"Lien vers Espace DRACAR : {DRACAR_AUTH_URL}"
                 ),
