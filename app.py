@@ -2409,9 +2409,8 @@ def request_documents(request_id):
     for d in docs:
         grouped.setdefault(d["doc_type"], []).append(d)
 
-    required_doc_types = _required_doc_types(req["heberge"], req["non_francais"])
     present_doc_types = {d["doc_type"] for d in docs}
-    suggested_missing_doc_types = [doc_type for doc_type in required_doc_types if doc_type not in present_doc_types]
+    missing_doc_type_options = [doc_type for doc_type in DOC_LABELS if doc_type not in present_doc_types]
 
     missing_doc_types = []
     raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
@@ -2428,8 +2427,7 @@ def request_documents(request_id):
         req=req,
         grouped=grouped,
         doc_labels=DOC_LABELS,
-        required_doc_types=required_doc_types,
-        suggested_missing_doc_types=suggested_missing_doc_types,
+        missing_doc_type_options=missing_doc_type_options,
         missing_doc_types=missing_doc_types,
     )
 
@@ -2446,8 +2444,7 @@ def serve_upload(request_id, filename):
 def review_documents(request_id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
-        req = conn.execute("SELECT heberge, non_francais FROM public_requests WHERE id = ?", (request_id,)).fetchone()
-        allowed_missing_doc_types = set(_required_doc_types(req["heberge"], req["non_francais"]) if req else [])
+        allowed_missing_doc_types = set(DOC_LABELS.keys())
         selected_missing_doc_types = [
             doc_type
             for doc_type in request.form.getlist("missing_doc_types")
