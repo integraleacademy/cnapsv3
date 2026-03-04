@@ -286,6 +286,22 @@
     <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
 
     <form id="review-form" method="post" action="/a-traiter/{{ req.id }}/documents/review">
+      <div class="doc">
+        <div class="group-title" style="margin:0 0 10px;font-size:20px;">Documents manquants</div>
+        <p class="subtitle" style="margin:0 0 12px;">Cochez les documents qui n'ont pas été fournis pour qu'ils soient inclus dans la notification.</p>
+        <div class="status-row">
+          {% for doc_type in required_doc_types %}
+            <label>
+              <input type="checkbox" name="missing_doc_types" value="{{ doc_type }}"
+                     {% if doc_type in missing_doc_types or (doc_type in suggested_missing_doc_types and doc_type not in missing_doc_types) %}checked{% endif %}>
+              <span class="status-pill {% if doc_type in suggested_missing_doc_types %}non-conforme{% else %}pending{% endif %}">
+                {% if doc_type in suggested_missing_doc_types %}⚠️{% else %}⬜{% endif %} {{ doc_labels.get(doc_type, doc_type) }}
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
       {% for doc_type, docs in grouped.items() %}
         <h2 class="group-title">{{ doc_labels.get(doc_type, doc_type) }}</h2>
         {% for d in docs %}
@@ -327,6 +343,7 @@
     const autosaveStatus = document.getElementById('autosave-status');
     const reasonInputs = reviewForm.querySelectorAll('.reason');
     const radioInputs = reviewForm.querySelectorAll('input[type="radio"]');
+    const checkboxInputs = reviewForm.querySelectorAll('input[type="checkbox"]');
     let pendingReasonSave;
 
     const setAutosaveStatus = (message, cssClass = '') => {
@@ -357,6 +374,10 @@
     };
 
     radioInputs.forEach((input) => {
+      input.addEventListener('change', autosave);
+    });
+
+    checkboxInputs.forEach((input) => {
       input.addEventListener('change', autosave);
     });
 
