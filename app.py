@@ -443,7 +443,8 @@ def _load_a_traiter_dataset(conn):
             COALESCE(doc_stats.conformes, 0) AS conformes,
             COALESCE(doc_stats.non_conformes, 0) AS non_conformes,
             COALESCE(doc_stats.en_attente, 0) AS en_attente,
-            COALESCE(doc_stats.notified_expected, 0) AS notified_expected
+            COALESCE(doc_stats.notified_expected, 0) AS notified_expected,
+            COALESCE(notification_stats.notification_count, 0) AS notification_count
         FROM public_requests pr
         LEFT JOIN dossiers d ON d.id = pr.dossier_id
         LEFT JOIN (
@@ -458,10 +459,32 @@ def _load_a_traiter_dataset(conn):
             WHERE is_active = 1
             GROUP BY request_id
         ) doc_stats ON doc_stats.request_id = pr.id
+        LEFT JOIN (
+            SELECT request_id, COUNT(*) AS notification_count
+            FROM request_non_conformity_notifications
+            GROUP BY request_id
+        ) notification_stats ON notification_stats.request_id = pr.id
         ORDER BY pr.id DESC
         """
     ).fetchall()
-    return [dict(row) for row in rows]
+
+    dataset = []
+    for row in rows:
+        item = dict(row)
+        missing_doc_types = []
+        raw_missing_doc_types = (item.get("missing_doc_types") or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing_doc_types = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing_doc_types, list):
+                    missing_doc_types = [doc_type for doc_type in parsed_missing_doc_types if doc_type in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_types = []
+
+        item["missing_docs_pending"] = int(bool(missing_doc_types) and int(item.get("notification_count") or 0) > 0)
+        dataset.append(item)
+
+    return dataset
 
 
 def _load_summary_source_data(conn):

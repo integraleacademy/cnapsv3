@@ -363,6 +363,7 @@
       {% set all_docs_conformes = (r.total_docs > 0 and r.total_docs == r.conformes) %}
       {% set has_non_conformes = (r.non_conformes > 0) %}
       {% set has_pending_docs = (r.en_attente > 0) %}
+      {% set has_missing_docs_pending = (r.missing_docs_pending > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
       <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}">
         <td>{{ r.nom }}</td>
@@ -394,7 +395,10 @@
           {% endif %}
         </td>
         <td>
-          <a class="btn {% if has_pending_docs %}warning-pending{% elif all_docs_conformes %}success{% elif has_non_conformes %}danger{% endif %}" href="/a-traiter/{{ r.id }}/documents">{% if all_docs_conformes %}✅ {% endif %}Gérer les documents</a>
+          <a class="btn {% if has_missing_docs_pending %}danger{% elif has_pending_docs %}warning-pending{% elif all_docs_conformes %}success{% elif has_non_conformes %}danger{% endif %}" href="/a-traiter/{{ r.id }}/documents">{% if all_docs_conformes and not has_missing_docs_pending %}✅ {% endif %}Gérer les documents</a>
+          {% if has_missing_docs_pending %}
+            <div class="save-hint" style="color:#dc2626;font-weight:700;">Nouveaux documents en attente</div>
+          {% endif %}
         </td>
         <td>
           {% if all_docs_conformes %}
