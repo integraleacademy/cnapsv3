@@ -35,6 +35,7 @@
                 Nous revenons vers vous concernant la formation <strong>{{ formation_name }}</strong>. Après vérification, certains documents de votre dossier doivent être modifiés avant transmission au CNAPS (Ministère de l'intérieur).
               </p>
 
+              {% if docs %}
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:6px 0 18px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;">
                 <tr>
                   <td style="padding:14px 16px 12px;">
@@ -50,6 +51,24 @@
                   </td>
                 </tr>
               </table>
+              {% endif %}
+
+              {% if missing_doc_labels %}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:6px 0 18px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;">
+                <tr>
+                  <td style="padding:14px 16px 12px;">
+                    <p style="margin:0 0 10px;color:#991b1b;font-size:14px;"><strong>Documents manquants :</strong></p>
+                    <ul style="margin:0;padding-left:20px;color:#7f1d1d;">
+                      {% for label in missing_doc_labels %}
+                      <li style="margin:0 0 8px;line-height:1.5;">
+                        <strong>{{ label }}</strong>
+                      </li>
+                      {% endfor %}
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+              {% endif %}
 
               <p style="margin:0 0 18px;">Vous pouvez déposer les versions corrigées en cliquant sur le bouton ci-dessous :</p>
               <p style="margin:0 0 22px;text-align:center;">

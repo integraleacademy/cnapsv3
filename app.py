@@ -289,6 +289,8 @@ def init_db():
             conn.execute("ALTER TABLE public_requests ADD COLUMN telephone TEXT")
         if "dracar_password" not in columns:
             conn.execute("ALTER TABLE public_requests ADD COLUMN dracar_password TEXT")
+        if "missing_doc_types" not in columns:
+            conn.execute("ALTER TABLE public_requests ADD COLUMN missing_doc_types TEXT")
 
         if _table_has_column(conn, "dossiers", "telephone"):
             conn.execute(
@@ -2407,7 +2409,27 @@ def request_documents(request_id):
     for d in docs:
         grouped.setdefault(d["doc_type"], []).append(d)
 
-    return render_template("documents_review.html", req=req, grouped=grouped, doc_labels=DOC_LABELS)
+    present_doc_types = {d["doc_type"] for d in docs}
+    missing_doc_type_options = [doc_type for doc_type in DOC_LABELS if doc_type not in present_doc_types]
+
+    missing_doc_types = []
+    raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
+    if raw_missing_doc_types:
+        try:
+            parsed = json.loads(raw_missing_doc_types)
+            if isinstance(parsed, list):
+                missing_doc_types = [doc_type for doc_type in parsed if doc_type in DOC_LABELS]
+        except json.JSONDecodeError:
+            missing_doc_types = []
+
+    return render_template(
+        "documents_review.html",
+        req=req,
+        grouped=grouped,
+        doc_labels=DOC_LABELS,
+        missing_doc_type_options=missing_doc_type_options,
+        missing_doc_types=missing_doc_types,
+    )
 
 
 @app.route("/uploads/<int:request_id>/<path:filename>")
@@ -2422,6 +2444,13 @@ def serve_upload(request_id, filename):
 def review_documents(request_id):
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
+        allowed_missing_doc_types = set(DOC_LABELS.keys())
+        selected_missing_doc_types = [
+            doc_type
+            for doc_type in request.form.getlist("missing_doc_types")
+            if doc_type in allowed_missing_doc_types
+        ]
+
         docs = conn.execute("SELECT id FROM request_documents WHERE request_id = ? AND is_active = 1", (request_id,)).fetchall()
         for d in docs:
             doc_id = d["id"]
@@ -2449,6 +2478,11 @@ def review_documents(request_id):
                 "UPDATE request_documents SET is_conforme = ?, review_status = ?, non_conformite_reason = ?, reviewed_at = ? WHERE id = ?",
                 (is_conforme, review_status, reason, reviewed_at, doc_id),
             )
+
+        conn.execute(
+            "UPDATE public_requests SET missing_doc_types = ? WHERE id = ?",
+            (json.dumps(selected_missing_doc_types, ensure_ascii=False), request_id),
+        )
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return ("", 204)
@@ -2480,7 +2514,17 @@ def notify_non_conformities(request_id):
             (request_id,),
         ).fetchall()
 
-        if not req or not docs:
+        missing_doc_labels = []
+        raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing, list):
+                    missing_doc_labels = [DOC_LABELS[doc_type] for doc_type in parsed_missing if doc_type in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_labels = []
+
+        if not req or (not docs and not missing_doc_labels):
             return redirect(url_for("request_documents", request_id=request_id))
 
         replace_url = url_for("replace_documents", request_id=request_id, _external=True)
@@ -2491,6 +2535,7 @@ def notify_non_conformities(request_id):
             formation_name=formation_name,
             docs=docs,
             labels=DOC_LABELS,
+            missing_doc_labels=missing_doc_labels,
             replace_url=replace_url,
             logo_url=url_for("static", filename="logo.png", _external=True),
         )
@@ -2507,7 +2552,7 @@ def notify_non_conformities(request_id):
 
         try:
             sms = (
-                f"Bonjour {req['prenom']}, certains documents de votre dossier CNAPS sont non conformes. "
+                f"Bonjour {req['prenom']}, certains documents de votre dossier CNAPS sont à corriger ou manquants. "
                 f"Merci de les remplacer ici : {replace_url}"
             )
             _send_sms(req["telephone"], sms)
