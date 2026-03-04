@@ -206,6 +206,15 @@
           </section>
         {% endfor %}
 
+        {% for doc_type in missing_doc_types %}
+          <section class="doc-card">
+            <div class="doc-title">{{ labels.get(doc_type, doc_type) }}</div>
+            <div class="reason">⚠️ Document manquant</div>
+            <p class="file-help">Ajoutez le document demandé au format PDF.</p>
+            <input type="file" name="missing_{{ doc_type }}" accept="application/pdf,.pdf" required>
+          </section>
+        {% endfor %}
+
         <button class="submit-btn" type="submit">Envoyer les nouveaux documents</button>
       </form>
     </section>
