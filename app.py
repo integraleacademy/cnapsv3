@@ -2577,6 +2577,16 @@ def replace_documents(request_id):
         if not req:
             abort(404)
 
+        missing_doc_types = []
+        raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing_doc_types = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing_doc_types, list):
+                    missing_doc_types = [doc_type for doc_type in parsed_missing_doc_types if doc_type in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_types = []
+
         invalids = conn.execute(
             """
             SELECT * FROM request_documents
@@ -2588,7 +2598,7 @@ def replace_documents(request_id):
         ).fetchall()
 
         if request.method == "POST":
-            if not invalids:
+            if not invalids and not missing_doc_types:
                 return render_template("replace_documents_already_sent.html")
 
             replaced = 0
@@ -2611,14 +2621,49 @@ def replace_documents(request_id):
                         (request_id, doc["doc_type"], original, stored, rel_path),
                     )
                     replaced += 1
+
+            remaining_missing_doc_types = []
+            for doc_type in missing_doc_types:
+                incoming = request.files.get(f"missing_{doc_type}")
+                if incoming and incoming.filename:
+                    if not incoming.filename.lower().endswith(".pdf"):
+                        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
+                    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
+                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
+
+                    original, stored, rel_path = _secure_store(incoming, str(request_id))
+                    conn.execute(
+                        """
+                        INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (request_id, doc_type, original, stored, rel_path),
+                    )
+                    replaced += 1
+                else:
+                    remaining_missing_doc_types.append(doc_type)
+
+            conn.execute(
+                "UPDATE public_requests SET missing_doc_types = ? WHERE id = ?",
+                (json.dumps(remaining_missing_doc_types, ensure_ascii=False), request_id),
+            )
+
             if replaced:
                 conn.execute("UPDATE public_requests SET updated_at = datetime('now','localtime') WHERE id = ?", (request_id,))
             return render_template("replace_documents_success.html", replaced=replaced)
 
-    if not invalids:
+    if not invalids and not missing_doc_types:
         return render_template("replace_documents_already_sent.html")
 
-    return render_template("replace_documents.html", req=req, invalids=invalids, labels=DOC_LABELS)
+    return render_template(
+        "replace_documents.html",
+        req=req,
+        invalids=invalids,
+        missing_doc_types=missing_doc_types,
+        labels=DOC_LABELS,
+    )
 
 
 @app.route("/a-traiter/<int:request_id>/download")
