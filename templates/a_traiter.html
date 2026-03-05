@@ -184,6 +184,20 @@
       display: none !important;
     }
 
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 14px;
+    }
+
+    .search-input {
+      width: min(360px, 100%);
+      padding: 9px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font: inherit;
+    }
+
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); }
       100% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
@@ -339,6 +353,16 @@
       <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
     </div>
   </section>
+
+  <div class="toolbar">
+    <input
+      id="nameSearchInput"
+      class="search-input"
+      type="search"
+      placeholder="Rechercher par nom ou prénom"
+      aria-label="Rechercher par nom ou prénom"
+    >
+  </div>
 
   <table>
     <thead>
@@ -532,6 +556,7 @@ const assignForm = document.getElementById('assignForm');
 const assignFormation = document.getElementById('assignFormation');
 const assignSessionDate = document.getElementById('assignSessionDate');
 const filterableRecapCards = document.querySelectorAll('[data-recap-filter]');
+const nameSearchInput = document.getElementById('nameSearchInput');
 let activeRecapFilter = '';
 
 function updateAssignDates(){
@@ -675,8 +700,14 @@ function rowMatchesRecapFilter(row, filterKey){
 
 function applyRecapFilter(){
   const rows = document.querySelectorAll('tbody tr');
+  const searchValue = normalizeValue(nameSearchInput?.value || '');
+
   rows.forEach(row => {
-    const shouldShow = !activeRecapFilter || rowMatchesRecapFilter(row, activeRecapFilter);
+    const nom = normalizeValue(row.children?.[0]?.textContent || '');
+    const prenom = normalizeValue(row.children?.[1]?.textContent || '');
+    const matchesSearch = !searchValue || nom.includes(searchValue) || prenom.includes(searchValue);
+    const matchesRecap = !activeRecapFilter || rowMatchesRecapFilter(row, activeRecapFilter);
+    const shouldShow = matchesSearch && matchesRecap;
     row.style.display = shouldShow ? '' : 'none';
   });
 
@@ -688,6 +719,10 @@ function applyRecapFilter(){
 function toggleRecapFilter(filterKey){
   activeRecapFilter = activeRecapFilter === filterKey ? '' : filterKey;
   applyRecapFilter();
+}
+
+if (nameSearchInput) {
+  nameSearchInput.addEventListener('input', applyRecapFilter);
 }
 
 function refreshCnapsCreatedInfo(row){
