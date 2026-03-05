@@ -494,6 +494,13 @@ def _load_summary_source_data(conn):
 
 def _is_demande_a_faire(row):
     """Détection robuste de "Demande à faire" avec fallback métier /a-traiter."""
+    total_docs = int(row.get("total_docs") or 0)
+    conformes = int(row.get("conformes") or 0)
+    all_docs_conformes = total_docs > 0 and total_docs == conformes
+
+    if not all_docs_conformes:
+        return False
+
     action_norm = _normalize_action_value(
         row.get("action_cnaps") or row.get("cnaps_action") or row.get("action")
     )
@@ -1400,7 +1407,10 @@ def _is_compte_cnaps_a_creer(row: dict) -> bool:
 def _is_demande_a_faire_summary(row: dict) -> bool:
     espace_cnaps = (row.get("espace_cnaps") or "").strip()
     statut_cnaps = (row.get("statut_cnaps") or "").strip()
-    return espace_cnaps == "Validé" and (statut_cnaps == "" or statut_cnaps == "--")
+    total_docs = int(row.get("total_docs") or 0)
+    conformes = int(row.get("conformes") or 0)
+    all_docs_conformes = total_docs > 0 and total_docs == conformes
+    return all_docs_conformes and espace_cnaps == "Validé" and (statut_cnaps == "" or statut_cnaps == "--")
 
 
 def _table_columns(conn, table_name: str):
@@ -1468,9 +1478,20 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
             pr.dossier_id AS dossier_id,
             {espace_expr} AS espace_cnaps_value,
             {statut_expr} AS statut_cnaps_value,
-            {action_expr} AS action_value
+            {action_expr} AS action_value,
+            COALESCE(doc_stats.total_docs, 0) AS total_docs,
+            COALESCE(doc_stats.conformes, 0) AS conformes
         FROM public_requests pr
         LEFT JOIN dossiers d ON d.id = pr.dossier_id
+        LEFT JOIN (
+            SELECT
+                request_id,
+                COUNT(*) AS total_docs,
+                SUM(CASE WHEN is_conforme = 1 THEN 1 ELSE 0 END) AS conformes
+            FROM request_documents
+            WHERE is_active = 1
+            GROUP BY request_id
+        ) doc_stats ON doc_stats.request_id = pr.id
         """
     ).fetchall()
 
@@ -1479,16 +1500,18 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
     ignored_example = None
 
     for row in rows:
-        request_id, dossier_id, espace_cnaps_value, statut_cnaps_value, action_value = row
+        request_id, dossier_id, espace_cnaps_value, statut_cnaps_value, action_value, total_docs, conformes = row
 
         action_normalized = _normalize_action_value(action_value)
         espace_normalized = _normalize_action_value(espace_cnaps_value)
         statut_normalized = _normalize_action_value(statut_cnaps_value)
         statut_empty = statut_normalized in {"", "--"}
 
+        all_docs_conformes = int(total_docs or 0) > 0 and int(total_docs or 0) == int(conformes or 0)
+
         is_demande = action_normalized == "demande_a_faire"
         fallback_demande = espace_normalized == "valide" and statut_empty
-        matched = is_demande or fallback_demande
+        matched = all_docs_conformes and (is_demande or fallback_demande)
 
         if matched:
             count += 1
@@ -1500,6 +1523,8 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
                     "action_normalized": action_normalized,
                     "espace_cnaps_value": espace_cnaps_value,
                     "statut_cnaps_value": statut_cnaps_value,
+                    "total_docs": total_docs,
+                    "conformes": conformes,
                 }
         elif ignored_example is None:
             ignored_example = {
@@ -1509,6 +1534,8 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
                 "action_normalized": action_normalized,
                 "espace_cnaps_value": espace_cnaps_value,
                 "statut_cnaps_value": statut_cnaps_value,
+                "total_docs": total_docs,
+                "conformes": conformes,
             }
 
     debug_payload = None

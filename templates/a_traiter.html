@@ -285,7 +285,8 @@
     {% if not (item.formation and item.session_date) %}
       {% set recap_ns.nouveau = recap_ns.nouveau + 1 %}
     {% endif %}
-    {% if item_espace == 'Validé' and item_cnaps_empty %}
+    {% set item_all_docs_conformes = (item.total_docs > 0 and item.total_docs == item.conformes) %}
+    {% if item_all_docs_conformes and item_espace == 'Validé' and item_cnaps_empty %}
       {% set recap_ns.demande = recap_ns.demande + 1 %}
     {% endif %}
     {% set recap_ns.documents = recap_ns.documents + (item.en_attente or 0) %}
@@ -365,7 +366,7 @@
       {% set has_pending_docs = (r.en_attente > 0) %}
       {% set has_missing_docs_pending = (r.missing_docs_pending > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
-      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}">
+      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}" data-total-docs="{{ r.total_docs or 0 }}" data-conformes-docs="{{ r.conformes or 0 }}">
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
         <td>
@@ -474,7 +475,7 @@
           {% set cnaps_empty = (cnaps == '' or cnaps == '--') %}
           <button
             type="button"
-            class="btn demande-a-faire-row {% if not (espace == 'Validé' and cnaps_empty) %}demande-hidden{% endif %}"
+            class="btn demande-a-faire-row {% if not (all_docs_conformes and espace == 'Validé' and cnaps_empty) %}demande-hidden{% endif %}"
             data-demande-a-faire
           >
             Demande à faire
@@ -582,7 +583,11 @@ function shouldShowDemande(row){
   const statutValue = (statutSelect.value || '').toString().trim();
   const isStatutEmpty = statutValue === '' || statutValue === '--';
 
-  return espaceValue === 'valide' && isStatutEmpty;
+  const totalDocs = Number(row.dataset.totalDocs || 0);
+  const conformesDocs = Number(row.dataset.conformesDocs || 0);
+  const allDocsConformes = totalDocs > 0 && totalDocs === conformesDocs;
+
+  return allDocsConformes && espaceValue === 'valide' && isStatutEmpty;
 }
 
 function refreshDemandeIndicators(){
