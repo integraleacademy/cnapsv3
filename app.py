@@ -54,6 +54,7 @@ BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "").strip()
 BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "").strip() or "Intégrale Academy"
 BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
+GESTIONSTAGIAIRE_SYNC_TOKEN = os.getenv("GESTIONSTAGIAIRE_SYNC_TOKEN", "").strip()
 ALLOW_SMS_MOCK = os.getenv("ALLOW_SMS_MOCK", "0").strip() == "1"
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
@@ -1292,6 +1293,59 @@ def notifications_espace_cnaps_a_valider_json():
 # --- à mettre en bas de l'app cnapsv3 (après les autres routes) ---
 from datetime import datetime, timedelta
 
+@app.route("/integrations/gestionstagiaire/cnaps/accept", methods=["POST"])
+def integration_accept_cnaps():
+    """Synchronise le statut CNAPS à ACCEPTÉ depuis gestionstagiaire."""
+    token = _extract_gestionstagiaire_sync_token()
+    if not _is_valid_gestionstagiaire_sync_token(token):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    request_id = payload.get("request_id")
+    dossier_id = payload.get("dossier_id")
+
+    if request_id is None and dossier_id is None:
+        return jsonify({
+            "ok": False,
+            "error": "missing_identifier",
+            "message": "Fournir request_id ou dossier_id dans le JSON.",
+        }), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+
+        if dossier_id is None:
+            req = conn.execute(
+                "SELECT dossier_id FROM public_requests WHERE id = ?",
+                (request_id,),
+            ).fetchone()
+            if not req or req["dossier_id"] is None:
+                return jsonify({"ok": False, "error": "request_not_found"}), 404
+            dossier_id = req["dossier_id"]
+
+        dossier = conn.execute(
+            "SELECT id, statut_cnaps FROM dossiers WHERE id = ?",
+            (dossier_id,),
+        ).fetchone()
+        if not dossier:
+            return jsonify({"ok": False, "error": "dossier_not_found"}), 404
+
+        old_statut = (dossier["statut_cnaps"] or "").strip()
+        if old_statut != "ACCEPTÉ":
+            conn.execute(
+                "UPDATE dossiers SET statut_cnaps = ? WHERE id = ?",
+                ("ACCEPTÉ", dossier_id),
+            )
+            _record_statut_cnaps_history(conn, dossier_id, "ACCEPTÉ")
+
+    return jsonify({
+        "ok": True,
+        "dossier_id": dossier_id,
+        "previous_statut_cnaps": old_statut,
+        "statut_cnaps": "ACCEPTÉ",
+    })
+
+
 @app.route("/recent_acceptes.json")
 def recent_acceptes_json():
     """Retourne les 10 derniers dossiers ACCEPTÉS avec date approximative de validation."""
@@ -1344,6 +1398,20 @@ def _normalize_action_value(value) -> str:
     if compact_alnum in {"demandeafaire", "demandesafaire", "afaire"}:
         return "demande_a_faire"
     return compact
+
+
+def _is_valid_gestionstagiaire_sync_token(token: str) -> bool:
+    expected = GESTIONSTAGIAIRE_SYNC_TOKEN
+    if not expected:
+        return False
+    return token == expected
+
+
+def _extract_gestionstagiaire_sync_token() -> str:
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return (request.headers.get("X-API-Key") or "").strip()
 
 
 def _normalize_summary_key(value) -> str:
