@@ -1414,6 +1414,31 @@ def _extract_gestionstagiaire_sync_token() -> str:
     return (request.headers.get("X-API-Key") or "").strip()
 
 
+def _extract_bearer_token() -> str:
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return ""
+
+
+def _normalize_lookup_identity(value: str) -> str:
+    if value is None:
+        return ""
+
+    normalized = str(value).strip().lower()
+    normalized = "".join(
+        c for c in unicodedata.normalize("NFD", normalized)
+        if unicodedata.category(c) != "Mn"
+    )
+    normalized = re.sub(r"[\-‐‑‒–—―'’`´]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized.replace(" ", "")
+
+
+def _normalize_lookup_email(value: str) -> str:
+    return (value or "").strip().lower()
+
+
 def _normalize_summary_key(value) -> str:
     return _normalize_action_value(value).replace(" ", "_")
 
@@ -1618,6 +1643,82 @@ def _compute_demandes_a_faire(conn, debug: bool = False):
     return count, debug_payload
 
 
+
+
+@app.route("/integrations/gestionstagiaire/cnaps/lookup", methods=["POST"])
+def integration_lookup_cnaps():
+    token = _extract_bearer_token()
+    if not _is_valid_gestionstagiaire_sync_token(token):
+        return jsonify({"error": "UNAUTHORIZED"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    first_name = (payload.get("first_name") or "").strip()
+    last_name = (payload.get("last_name") or "").strip()
+    email = (payload.get("email") or "").strip()
+
+    if not first_name or not last_name:
+        return jsonify({"error": "INVALID_PAYLOAD", "message": "first_name and last_name are required"}), 400
+
+    normalized_first_name = _normalize_lookup_identity(first_name)
+    normalized_last_name = _normalize_lookup_identity(last_name)
+    normalized_email = _normalize_lookup_email(email)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.create_function("norm_lookup", 1, _normalize_lookup_identity)
+        conn.create_function("norm_email", 1, _normalize_lookup_email)
+
+        query = """
+            SELECT
+                pr.id AS request_id,
+                pr.email AS request_email,
+                d.id AS dossier_id,
+                d.nom,
+                d.prenom
+            FROM dossiers d
+            LEFT JOIN public_requests pr ON pr.dossier_id = d.id
+            WHERE norm_lookup(d.nom) = ?
+              AND norm_lookup(d.prenom) = ?
+        """
+        params = [normalized_last_name, normalized_first_name]
+
+        if normalized_email:
+            query += " AND norm_email(pr.email) = ?"
+            params.append(normalized_email)
+
+        rows = conn.execute(query, tuple(params)).fetchall()
+
+    app.logger.info(
+        "[LOOKUP] matches=%s first_name=%s last_name=%s email_provided=%s",
+        len(rows),
+        normalized_first_name,
+        normalized_last_name,
+        bool(normalized_email),
+    )
+
+    if not rows:
+        return jsonify({"error": "NOT_FOUND"}), 404
+
+    unique = {}
+    for row in rows:
+        key = (row["request_id"], row["dossier_id"])
+        unique[key] = row
+
+    matches = list(unique.values())
+    if len(matches) > 1:
+        return jsonify({"error": "AMBIGUOUS", "count": len(matches)}), 409
+
+    match = matches[0]
+    response = {}
+    if match["request_id"] is not None:
+        response["request_id"] = str(match["request_id"])
+    if match["dossier_id"] is not None:
+        response["dossier_id"] = str(match["dossier_id"])
+
+    if not response:
+        return jsonify({"error": "NOT_FOUND"}), 404
+
+    return jsonify(response), 200
 @app.route("/lookup_cnaps.json")
 def lookup_cnaps():
     nom = (request.args.get("nom") or "").strip()
