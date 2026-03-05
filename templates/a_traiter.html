@@ -324,6 +324,16 @@
     <a href="/">← Retour</a>
   </div>
 
+  <div class="toolbar">
+    <input
+      id="nameSearchInput"
+      class="search-input"
+      type="search"
+      placeholder="Rechercher par nom ou prénom"
+      aria-label="Rechercher par nom ou prénom"
+    >
+  </div>
+
   <section class="recap-grid" aria-label="Tableau récapitulatif">
     <div class="recap-card recap-nouveau {{ 'recap-zero' if recap_ns.nouveau == 0 else '' }}">
       <div class="recap-title">Nouveau dossier</div>
@@ -354,16 +364,6 @@
       <div class="recap-value" id="recapInstruction">{{ recap_ns.instruction }}</div>
     </div>
   </section>
-
-  <div class="toolbar">
-    <input
-      id="nameSearchInput"
-      class="search-input"
-      type="search"
-      placeholder="Rechercher par nom ou prénom"
-      aria-label="Rechercher par nom ou prénom"
-    >
-  </div>
 
   <table>
     <thead>
