@@ -1478,31 +1478,6 @@ def _normalize_lookup_email(value: str) -> str:
     return (value or "").strip().lower()
 
 
-def normalize_text(value: str) -> str:
-    """Normalise un texte (accents/casse/espaces) pour les recherches d'identité."""
-    return _normalize_lookup_identity(value)
-
-
-def _select_best_exact_identity_match(matches, input_nom: str, input_prenom: str):
-    """Départage les doublons exacts (après normalisation) de façon déterministe."""
-    if not matches:
-        return None
-
-    nom_raw = (input_nom or "").strip().lower()
-    prenom_raw = (input_prenom or "").strip().lower()
-
-    def _score(item):
-        item_nom = (item.get("nom") or "").strip().lower()
-        item_prenom = (item.get("prenom") or "").strip().lower()
-        raw_exact_score = int(item_nom == nom_raw and item_prenom == prenom_raw)
-        has_email_score = int(bool((item.get("email") or "").strip()))
-        request_id = int(item.get("id") or 0)
-        dossier_id = int(item.get("dossier_id") or 0)
-        return (raw_exact_score, has_email_score, request_id, dossier_id)
-
-    return max(matches, key=_score)
-
-
 def _normalize_summary_key(value) -> str:
     return _normalize_action_value(value).replace(" ", "_")
 
@@ -1830,84 +1805,6 @@ def lookup_cnaps():
 
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500, {"Access-Control-Allow-Origin": "*"}
-
-
-@app.route("/api/recherche-mail", methods=["GET"])
-def api_recherche_mail():
-    nom = (request.args.get("nom") or "").strip()
-    prenom = (request.args.get("prenom") or "").strip()
-
-    app.logger.info("[API RECHERCHE MAIL] Requête reçue nom=%r prenom=%r", nom, prenom)
-
-    if not nom or not prenom:
-        return jsonify(
-            {
-                "success": False,
-                "message": "Les paramètres nom et prenom sont obligatoires",
-            }
-        ), 400
-
-    normalized_nom = normalize_text(nom)
-    normalized_prenom = normalize_text(prenom)
-
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            rows = _load_a_traiter_dataset(conn)
-
-        app.logger.info("[API RECHERCHE MAIL] Dossiers analysés=%s", len(rows))
-
-        matches = []
-        for row in rows:
-            row_nom = row.get("nom")
-            row_prenom = row.get("prenom")
-            if normalize_text(row_nom) == normalized_nom and normalize_text(row_prenom) == normalized_prenom:
-                matches.append(row)
-
-        if not matches:
-            app.logger.info("[API RECHERCHE MAIL] Aucun dossier trouvé pour nom=%r prenom=%r", nom, prenom)
-            return jsonify(
-                {
-                    "success": True,
-                    "found": False,
-                    "message": "Aucun dossier trouvé",
-                }
-            ), 200
-
-        best_match = _select_best_exact_identity_match(matches, nom, prenom)
-        mail = (best_match.get("email") or "").strip()
-        telephone = (best_match.get("telephone") or "").strip()
-        statut_cnaps = (best_match.get("statut_cnaps") or "").strip()
-
-        app.logger.info(
-            "[API RECHERCHE MAIL] Dossier trouvé id=%s dossier_id=%s mail=%r",
-            best_match.get("id"),
-            best_match.get("dossier_id"),
-            mail,
-        )
-
-        response = {
-            "success": True,
-            "found": True,
-            "nom": (best_match.get("nom") or "").strip(),
-            "prenom": (best_match.get("prenom") or "").strip(),
-            "mail": mail,
-            "telephone": telephone,
-            "statut_cnaps": statut_cnaps,
-        }
-
-        if not mail:
-            response["message"] = "Dossier trouvé mais aucun email n'est renseigné"
-
-        return jsonify(response), 200
-
-    except Exception as exc:
-        app.logger.exception(
-            "[API RECHERCHE MAIL] Erreur nom=%r prenom=%r erreur=%s",
-            nom,
-            prenom,
-            exc,
-        )
-        return jsonify({"success": False, "message": str(exc)}), 500
 
 DOC_LABELS = {
     "identity": "Pièce d'identité (recto/verso) ou passeport",
