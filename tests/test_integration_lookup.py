@@ -116,7 +116,31 @@ class IntegrationLookupCnapsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.get_json(),
-            {"request_id": str(request_id), "dossier_id": str(dossier_id)},
+            {
+                "request_id": str(request_id),
+                "dossier_id": str(dossier_id),
+                "email": "jean@example.com",
+            },
+        )
+
+    def test_lookup_returns_200_with_empty_email_when_missing(self):
+        dossier_id = self._insert_dossier("Dupont", "Jeanne")
+        request_id = self._insert_request(dossier_id, "")
+
+        response = self.client.post(
+            "/integrations/gestionstagiaire/cnaps/lookup",
+            headers=self._auth_headers(),
+            json={"first_name": "Jeanne", "last_name": "Dupont"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "request_id": str(request_id),
+                "dossier_id": str(dossier_id),
+                "email": "",
+            },
         )
 
 
