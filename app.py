@@ -771,6 +771,45 @@ def update_request_telephone(request_id):
     return jsonify({"ok": True})
 
 
+@app.route("/a-traiter/<int:request_id>/email", methods=["POST"])
+@login_required
+def update_request_email(request_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").strip().lower()
+    else:
+        email = (request.form.get("email") or "").strip().lower()
+
+    if email and "@" not in email:
+        return jsonify({"ok": False, "error": "Email invalide"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id, dossier_id FROM public_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        conn.execute(
+            """
+            UPDATE public_requests
+            SET email = ?, updated_at = datetime('now','localtime')
+            WHERE id = ?
+            """,
+            (email, request_id),
+        )
+
+        if req["dossier_id"] and _table_has_column(conn, "dossiers", "email"):
+            conn.execute(
+                "UPDATE dossiers SET email = ? WHERE id = ?",
+                (email, req["dossier_id"]),
+            )
+
+    return jsonify({"ok": True, "email": email})
+
+
 @app.route("/a-traiter/<int:request_id>/dracar-credentials", methods=["POST"])
 @login_required
 def update_request_dracar_credentials(request_id):

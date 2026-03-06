@@ -371,6 +371,7 @@
         <th>Nom</th>
         <th>Prénom</th>
         <th>Téléphone</th>
+        <th>Mail</th>
         <th>Affecter une formation</th>
         <th>Formation</th>
         <th>Dates de formation</th>
@@ -400,6 +401,16 @@
             data-request-id="{{ r.id }}"
             value="{{ r.telephone or '' }}"
             placeholder="Ex: 0612345678"
+          >
+          <div class="save-hint">Sauvegarde automatique</div>
+        </td>
+        <td>
+          <input
+            type="email"
+            class="mail-input"
+            data-request-id="{{ r.id }}"
+            value="{{ r.email or '' }}"
+            placeholder="email@exemple.com"
           >
           <div class="save-hint">Sauvegarde automatique</div>
         </td>
@@ -922,6 +933,46 @@ document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => 
     if (value && !hasEnoughDigits(value)) {
       return;
     }
+    timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
+  });
+
+  input.addEventListener('blur', () => save({ showAlertOnError: true }));
+});
+
+
+document.querySelectorAll('.mail-input[data-request-id]').forEach(input => {
+  let timeoutId;
+  let lastSaved = (input.value || '').trim().toLowerCase();
+
+  const save = ({ showAlertOnError = true } = {}) => {
+    const rid = input.dataset.requestId;
+    if (!rid) return;
+
+    const value = (input.value || '').trim().toLowerCase();
+    if (value === lastSaved) return;
+
+    fetch(`/a-traiter/${rid}/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: value })
+    }).then(async (response) => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Erreur de sauvegarde du mail');
+      }
+
+      lastSaved = value;
+      input.value = value;
+    }).catch((error) => {
+      if (showAlertOnError) {
+        window.alert(error.message || 'Impossible de sauvegarder le mail');
+      }
+      input.value = lastSaved;
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timeoutId);
     timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
   });
 
