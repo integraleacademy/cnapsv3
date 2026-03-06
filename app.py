@@ -1714,6 +1714,7 @@ def integration_lookup_cnaps():
         response["request_id"] = str(match["request_id"])
     if match["dossier_id"] is not None:
         response["dossier_id"] = str(match["dossier_id"])
+    response["email"] = str(match["request_email"] or "").strip()
 
     if not response:
         return jsonify({"error": "NOT_FOUND"}), 404
