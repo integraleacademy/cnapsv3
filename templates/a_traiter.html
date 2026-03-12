@@ -391,7 +391,7 @@
       {% set has_pending_docs = (r.en_attente > 0) %}
       {% set has_missing_docs_pending = (r.missing_docs_pending > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
-      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}" data-total-docs="{{ r.total_docs or 0 }}" data-conformes-docs="{{ r.conformes or 0 }}">
+      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}" data-total-docs="{{ r.total_docs or 0 }}" data-conformes-docs="{{ r.conformes or 0 }}" data-missing-docs-pending="{{ r.missing_docs_pending or 0 }}">
         <td>{{ r.nom }}</td>
         <td>{{ r.prenom }}</td>
         <td>
@@ -510,7 +510,7 @@
           {% set cnaps_empty = (cnaps == '' or cnaps == '--') %}
           <button
             type="button"
-            class="btn demande-a-faire-row {% if not (all_docs_conformes and espace == 'Validé' and cnaps_empty) %}demande-hidden{% endif %}"
+            class="btn demande-a-faire-row {% if not (all_docs_conformes and not has_pending_docs and not has_missing_docs_pending and espace == 'Validé' and cnaps_empty) %}demande-hidden{% endif %}"
             data-demande-a-faire
           >
             Demande à faire
@@ -621,9 +621,13 @@ function shouldShowDemande(row){
 
   const totalDocs = Number(row.dataset.totalDocs || 0);
   const conformesDocs = Number(row.dataset.conformesDocs || 0);
+  const pendingDocs = Number(row.dataset.pendingDocuments || 0);
+  const missingDocsPending = Number(row.dataset.missingDocsPending || 0);
   const allDocsConformes = totalDocs > 0 && totalDocs === conformesDocs;
 
-  return allDocsConformes && espaceValue === 'valide' && isStatutEmpty;
+  const hasGreenDocumentsButton = allDocsConformes && pendingDocs === 0 && missingDocsPending === 0;
+
+  return hasGreenDocumentsButton && espaceValue === 'valide' && isStatutEmpty;
 }
 
 function refreshDemandeIndicators(){
