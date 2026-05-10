@@ -209,6 +209,7 @@
     }
 
     .commentaire-input,
+    .identity-input,
     .telephone-input,
     .dracar-input,
     .cnaps-select {
@@ -391,9 +392,29 @@
       {% set has_pending_docs = (r.en_attente > 0) %}
       {% set has_missing_docs_pending = (r.missing_docs_pending > 0) %}
       {% set is_new_dossier = not (r.formation and r.session_date) %}
-      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}" data-total-docs="{{ r.total_docs or 0 }}" data-conformes-docs="{{ r.conformes or 0 }}" data-missing-docs-pending="{{ r.missing_docs_pending or 0 }}">
-        <td>{{ r.nom }}</td>
-        <td>{{ r.prenom }}</td>
+      <tr data-pending-documents="{{ r.en_attente or 0 }}" data-notified-expected-documents="{{ r.notified_expected or 0 }}" data-is-new-dossier="{{ '1' if is_new_dossier else '0' }}" data-total-docs="{{ r.total_docs or 0 }}" data-conformes-docs="{{ r.conformes or 0 }}" data-missing-docs-pending="{{ r.missing_docs_pending or 0 }}" data-search-nom="{{ r.nom or '' }}" data-search-prenom="{{ r.prenom or '' }}">
+        <td>
+          <input
+            type="text"
+            class="identity-input"
+            data-request-id="{{ r.id }}"
+            data-identity-field="nom"
+            value="{{ r.nom or '' }}"
+            placeholder="Nom"
+          >
+          <div class="save-hint">Sauvegarde automatique</div>
+        </td>
+        <td>
+          <input
+            type="text"
+            class="identity-input"
+            data-request-id="{{ r.id }}"
+            data-identity-field="prenom"
+            value="{{ r.prenom or '' }}"
+            placeholder="Prénom"
+          >
+          <div class="save-hint">Sauvegarde automatique</div>
+        </td>
         <td>
           <input
             type="tel"
@@ -723,8 +744,10 @@ function applyRecapFilter(){
   const searchValue = normalizeValue(nameSearchInput?.value || '');
 
   rows.forEach(row => {
-    const nom = normalizeValue(row.children?.[0]?.textContent || '');
-    const prenom = normalizeValue(row.children?.[1]?.textContent || '');
+    const nomInput = row.querySelector('[data-identity-field="nom"]');
+    const prenomInput = row.querySelector('[data-identity-field="prenom"]');
+    const nom = normalizeValue(nomInput?.value || row.dataset.searchNom || row.children?.[0]?.textContent || '');
+    const prenom = normalizeValue(prenomInput?.value || row.dataset.searchPrenom || row.children?.[1]?.textContent || '');
     const matchesSearch = !searchValue || nom.includes(searchValue) || prenom.includes(searchValue);
     const matchesRecap = !activeRecapFilter || rowMatchesRecapFilter(row, activeRecapFilter);
     const shouldShow = matchesSearch && matchesRecap;
@@ -893,6 +916,56 @@ document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
   });
 
   input.addEventListener('blur', save);
+});
+
+
+document.querySelectorAll('.identity-input[data-request-id][data-identity-field]').forEach(input => {
+  let timeoutId;
+  let lastSaved = (input.value || '').trim();
+
+  const save = ({ showAlertOnError = true } = {}) => {
+    const rid = input.dataset.requestId;
+    const field = input.dataset.identityField;
+    if (!rid || !field) return;
+
+    const value = (input.value || '').trim();
+    if (value === lastSaved) return;
+
+    fetch(`/a-traiter/${rid}/identity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value })
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Erreur de sauvegarde du nom/prénom');
+      }
+
+      const savedValue = data.value || value;
+      lastSaved = savedValue;
+      input.value = savedValue;
+
+      const row = input.closest('tr');
+      if (row) {
+        if (field === 'nom') row.dataset.searchNom = savedValue;
+        if (field === 'prenom') row.dataset.searchPrenom = savedValue;
+      }
+      applyRecapFilter();
+    }).catch((error) => {
+      if (showAlertOnError) {
+        window.alert(error.message || 'Impossible de sauvegarder le nom/prénom');
+      }
+      input.value = lastSaved;
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timeoutId);
+    applyRecapFilter();
+    timeoutId = setTimeout(() => save({ showAlertOnError: false }), 350);
+  });
+
+  input.addEventListener('blur', () => save({ showAlertOnError: true }));
 });
 
 document.querySelectorAll('.telephone-input[data-request-id]').forEach(input => {
