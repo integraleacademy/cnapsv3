@@ -732,6 +732,49 @@ def update_commentaire(id):
     return redirect("/")
 
 
+@app.route("/a-traiter/<int:request_id>/identity", methods=["POST"])
+@login_required
+def update_request_identity(request_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        field = (data.get("field") or "").strip()
+        value = (data.get("value") or "").strip()
+    else:
+        field = (request.form.get("field") or "").strip()
+        value = (request.form.get("value") or "").strip()
+
+    if field not in {"nom", "prenom"}:
+        return jsonify({"ok": False, "error": "Champ invalide"}), 400
+    if not value:
+        return jsonify({"ok": False, "error": "Le nom et le prénom sont obligatoires"}), 400
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute(
+            "SELECT id, dossier_id FROM public_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"ok": False, "error": "Demande introuvable"}), 404
+
+        conn.execute(
+            f"""
+            UPDATE public_requests
+            SET {field} = ?, updated_at = datetime('now','localtime')
+            WHERE id = ?
+            """,
+            (value, request_id),
+        )
+
+        if req["dossier_id"] and _table_has_column(conn, "dossiers", field):
+            conn.execute(
+                f"UPDATE dossiers SET {field} = ? WHERE id = ?",
+                (value, req["dossier_id"]),
+            )
+
+    return jsonify({"ok": True, "field": field, "value": value})
+
+
 @app.route("/a-traiter/<int:request_id>/telephone", methods=["POST"])
 @login_required
 def update_request_telephone(request_id):
