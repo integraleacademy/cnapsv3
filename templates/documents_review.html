@@ -258,6 +258,81 @@
       transform: translateY(-1px);
     }
 
+
+    .flash-messages {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+
+    .flash {
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1e40af;
+      font-weight: 600;
+    }
+
+    .flash.error,
+    .flash.public_error {
+      border-color: #fecaca;
+      background: var(--danger-bg);
+      color: #b91c1c;
+    }
+
+    .flash.success {
+      border-color: #bbf7d0;
+      background: var(--success-bg);
+      color: #15803d;
+    }
+
+    .add-document-form {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    select,
+    input[type="file"] {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+    }
+
+    select:focus,
+    input[type="file"]:focus {
+      outline: none;
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .2);
+    }
+
+    .help {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+
+    @media (max-width: 640px) {
+      .add-document-form {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .autosave-status {
       margin: 0 0 16px;
       font-size: 14px;
@@ -284,6 +359,36 @@
     <h1>Documents de {{ req.prenom }} {{ req.nom }}</h1>
     <p class="subtitle">Sélectionnez un statut clair pour chaque document puis notifiez les non-conformités.</p>
     <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages" role="status" aria-live="polite">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="doc">
+      <div class="group-title" style="margin:0 0 10px;font-size:20px;">Ajouter un document</div>
+      <form class="add-document-form" method="post" action="/a-traiter/{{ req.id }}/documents/add" enctype="multipart/form-data">
+        <label class="field">
+          Type de document
+          <select name="doc_type" required>
+            {% for doc_type, label in doc_labels.items() %}
+              <option value="{{ doc_type }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          Fichier PDF
+          <input type="file" name="document" accept="application/pdf,.pdf" required>
+        </label>
+        <button class="btn-primary" type="submit">Ajouter</button>
+        <p class="help">Format accepté : PDF uniquement, taille maximale 5 Mo. Le document ajouté apparaîtra ensuite dans la liste à contrôler.</p>
+      </form>
+    </div>
 
     <form id="review-form" method="post" action="/a-traiter/{{ req.id }}/documents/review">
       <div class="doc">
