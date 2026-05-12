@@ -2740,6 +2740,64 @@ def serve_upload(request_id, filename):
     return send_from_directory(folder, filename, as_attachment=False)
 
 
+@app.route("/a-traiter/<int:request_id>/documents/add", methods=["POST"])
+@login_required
+def add_request_document(request_id):
+    doc_type = (request.form.get("doc_type") or "").strip()
+    incoming = request.files.get("document")
+
+    if doc_type not in DOC_LABELS:
+        flash("Type de document invalide.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    if not incoming or not incoming.filename:
+        flash("Veuillez sélectionner un fichier PDF à ajouter.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    if not incoming.filename.lower().endswith(".pdf"):
+        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
+        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        req = conn.execute("SELECT * FROM public_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            flash("Ce dossier n'existe plus ou a déjà été traité.", "warning")
+            return redirect(url_for("a_traiter"))
+
+        original, stored, rel_path = _secure_store(incoming, str(request_id))
+        conn.execute(
+            """
+            INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (request_id, doc_type, original, stored, rel_path),
+        )
+
+        missing_doc_types = []
+        raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing_doc_types = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing_doc_types, list):
+                    missing_doc_types = [item for item in parsed_missing_doc_types if item in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_types = []
+
+        remaining_missing_doc_types = [item for item in missing_doc_types if item != doc_type]
+        conn.execute(
+            "UPDATE public_requests SET missing_doc_types = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (json.dumps(remaining_missing_doc_types, ensure_ascii=False), request_id),
+        )
+
+    flash(f"Document ajouté : {DOC_LABELS[doc_type]}.", "success")
+    return redirect(url_for("request_documents", request_id=request_id))
+
+
 @app.route("/a-traiter/<int:request_id>/documents/review", methods=["POST"])
 @login_required
 def review_documents(request_id):
