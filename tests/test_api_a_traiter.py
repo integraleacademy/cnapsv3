@@ -1,7 +1,9 @@
+import json
 import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import timedelta
 
 import app as cnaps_app
 
@@ -72,6 +74,44 @@ class ApiATraiterTests(unittest.TestCase):
         self.assertEqual(body["requests"][0]["prenom"], "Jean")
         self.assertEqual(body["requests"][0]["email"], "jean@example.com")
         self.assertIn("cnaps_is_expired", body["requests"][0])
+
+    def test_api_a_traiter_serializes_timedelta_fields_as_seconds(self):
+        self._insert_request()
+        original_compute = cnaps_app._compute_cnaps_timing
+
+        try:
+            cnaps_app._compute_cnaps_timing = lambda row: {
+                "cnaps_remaining": timedelta(hours=1, minutes=2, seconds=3),
+                "cnaps_is_expired": False,
+            }
+
+            response = self.client.get("/api/a-traiter", headers=self._auth_headers())
+        finally:
+            cnaps_app._compute_cnaps_timing = original_compute
+
+        self.assertEqual(response.status_code, 200)
+        json.loads(response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertEqual(body["requests"][0]["cnaps_remaining"], 3723)
+
+    def test_api_a_traiter_does_not_return_sensitive_fields(self):
+        request_id = self._insert_request()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE public_requests
+                SET dracar_password = ?, espace_cnaps_validation_token = ?
+                WHERE id = ?
+                """,
+                ("secret-password", "secret-token", request_id),
+            )
+
+        response = self.client.get("/api/a-traiter", headers=self._auth_headers())
+
+        self.assertEqual(response.status_code, 200)
+        request_payload = response.get_json()["requests"][0]
+        self.assertNotIn("dracar_password", request_payload)
+        self.assertNotIn("espace_cnaps_validation_token", request_payload)
 
     def test_html_a_traiter_still_requires_user_login(self):
         response = self.client.get("/a-traiter")
