@@ -5,7 +5,7 @@ import os
 import shutil
 import csv
 from io import StringIO
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from werkzeug.security import check_password_hash
 import unicodedata
@@ -20,6 +20,7 @@ from urllib.error import HTTPError, URLError
 import json
 import re
 import hmac
+import logging
 
 
 
@@ -430,6 +431,56 @@ def _request_phone_select_expr(conn):
         return "NULLIF(d.telephone, '')"
     return "NULL"
 
+
+
+API_A_TRAITER_ALLOWED_FIELDS = (
+    "id",
+    "dossier_id",
+    "nom",
+    "prenom",
+    "email",
+    "date_naissance",
+    "telephone",
+    "heberge",
+    "non_francais",
+    "formation",
+    "session_date",
+    "espace_cnaps",
+    "espace_cnaps_created_at",
+    "created_at",
+    "updated_at",
+    "statut_cnaps",
+    "nub",
+    "total_docs",
+    "conformes",
+    "non_conformes",
+    "en_attente",
+    "notified_expected",
+    "notification_count",
+    "missing_docs_pending",
+    "cnaps_expiration_dt",
+    "cnaps_expiration_label",
+    "cnaps_reminder_4h_label",
+    "cnaps_reminder_2h_label",
+    "cnaps_is_expired",
+    "cnaps_remaining",
+)
+
+
+def _to_json_safe(value):
+    if isinstance(value, timedelta):
+        return int(value.total_seconds())
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _to_json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_safe(item) for item in value]
+    return value
+
+
+def _filter_api_a_traiter_row(row):
+    return {field: row.get(field) for field in API_A_TRAITER_ALLOWED_FIELDS if field in row}
 
 def _load_a_traiter_dataset(conn):
     """Source de vérité partagée avec /a-traiter."""
@@ -1394,7 +1445,6 @@ def notifications_espace_cnaps_a_valider_json():
 
 
 # --- à mettre en bas de l'app cnapsv3 (après les autres routes) ---
-from datetime import datetime, timedelta
 
 @app.route("/integrations/gestionstagiaire/cnaps/accept", methods=["POST"])
 def integration_accept_cnaps():
@@ -2435,16 +2485,22 @@ def api_a_traiter():
     if not _is_valid_cnapsv3_api_token(token):
         return jsonify({"success": False, "error": "UNAUTHORIZED"}), 401
 
-    with sqlite3.connect(DB_NAME) as conn:
-        rows_dict = _load_a_traiter_dataset(conn)
-        _send_cnaps_reminders(conn, rows_dict)
-        for row in rows_dict:
-            timing = _compute_cnaps_timing(row)
-            row.update(timing)
-            if row.get("espace_cnaps") == "Validé":
-                row["cnaps_is_expired"] = False
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            rows_dict = _load_a_traiter_dataset(conn)
+            _send_cnaps_reminders(conn, rows_dict)
+            for row in rows_dict:
+                timing = _compute_cnaps_timing(row)
+                row.update(timing)
+                if row.get("espace_cnaps") == "Validé":
+                    row["cnaps_is_expired"] = False
 
-    return jsonify({"success": True, "requests": rows_dict})
+        api_rows = [_to_json_safe(_filter_api_a_traiter_row(row)) for row in rows_dict]
+    except Exception:
+        logging.exception("Unexpected error while preparing /api/a-traiter response")
+        return jsonify({"success": False, "error": "INTERNAL_ERROR"}), 500
+
+    return jsonify({"success": True, "requests": api_rows})
 
 
 @app.route("/a-traiter")
