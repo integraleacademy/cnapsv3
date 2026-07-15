@@ -19,6 +19,7 @@ from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
 import json
 import re
+import hmac
 
 
 
@@ -55,6 +56,7 @@ BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "").strip() or "Intégrale Ac
 BREVO_SMS_SENDER = os.getenv("BREVO_SMS_SENDER", "").strip()
 SMS_WEBHOOK_URL = os.getenv("SMS_WEBHOOK_URL", "").strip()
 GESTIONSTAGIAIRE_SYNC_TOKEN = os.getenv("GESTIONSTAGIAIRE_SYNC_TOKEN", "").strip()
+CNAPSV3_API_TOKEN = os.getenv("CNAPSV3_API_TOKEN", "").strip()
 ALLOW_SMS_MOCK = os.getenv("ALLOW_SMS_MOCK", "0").strip() == "1"
 DRACAR_AUTH_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/auth/realms/personne-physique/protocol/openid-connect/auth?client_id=cnaps&redirect_uri=https%3A%2F%2Fespace-usagers.cnaps.interieur.gouv.fr%2Fusager%2Fapp&state=e5d9b066-1e63-4147-b169-862be8c082e9&response_mode=fragment&response_type=code&scope=openid%20profile&nonce=2fb2bea0-8e33-4c8c-b6b4-fc906e587b66&code_challenge=UVZRu6sC--Y5Ypc6O2WfJfwtXo_pbb8LCoQzvB7ouHo&code_challenge_method=S256"
 DRACAR_APP_URL = "https://espace-usagers.cnaps.interieur.gouv.fr/usager/app/accueil"
@@ -1522,6 +1524,13 @@ def _extract_bearer_token() -> str:
     return ""
 
 
+def _is_valid_cnapsv3_api_token(token: str) -> bool:
+    expected = CNAPSV3_API_TOKEN
+    if not expected or not token:
+        return False
+    return hmac.compare_digest(token, expected)
+
+
 def _normalize_lookup_identity(value: str) -> str:
     if value is None:
         return ""
@@ -2418,6 +2427,24 @@ def public_form():
     )
 
     return render_template("public_form_success.html", prenom=prenom)
+
+
+@app.route("/api/a-traiter", methods=["GET"])
+def api_a_traiter():
+    token = _extract_bearer_token()
+    if not _is_valid_cnapsv3_api_token(token):
+        return jsonify({"success": False, "error": "UNAUTHORIZED"}), 401
+
+    with sqlite3.connect(DB_NAME) as conn:
+        rows_dict = _load_a_traiter_dataset(conn)
+        _send_cnaps_reminders(conn, rows_dict)
+        for row in rows_dict:
+            timing = _compute_cnaps_timing(row)
+            row.update(timing)
+            if row.get("espace_cnaps") == "Validé":
+                row["cnaps_is_expired"] = False
+
+    return jsonify({"success": True, "requests": rows_dict})
 
 
 @app.route("/a-traiter")
