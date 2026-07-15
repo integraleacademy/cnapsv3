@@ -438,7 +438,7 @@ def _load_a_traiter_dataset(conn):
         SELECT
             pr.*,
             d.statut_cnaps,
-            d.commentaire,
+            d.commentaire AS nub,
             {telephone_expr} AS telephone,
             COALESCE(doc_stats.total_docs, 0) AS total_docs,
             COALESCE(doc_stats.conformes, 0) AS conformes,
@@ -730,6 +730,25 @@ def update_commentaire(id):
         conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (commentaire, id))
 
     return redirect("/")
+
+
+@app.route("/nub/<int:id>", methods=["POST"])
+@login_required
+def update_nub(id):
+    # Le NUB est stocké dans l’ancien champ commentaire pour conserver la compatibilité
+    # avec la base existante et les exports historiques.
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        nub = data.get("nub", "")
+    else:
+        nub = request.form.get("nub", "")
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("UPDATE dossiers SET commentaire = ? WHERE id = ?", (nub, id))
+
+    if request.is_json:
+        return ("", 204)
+    return redirect("/a-traiter")
 
 
 @app.route("/a-traiter/<int:request_id>/identity", methods=["POST"])

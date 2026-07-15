@@ -208,7 +208,7 @@
       100% { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
     }
 
-    .commentaire-input,
+    .nub-input,
     .identity-input,
     .telephone-input,
     .dracar-input,
@@ -382,7 +382,7 @@
         <th>DRACAR</th>
         <th>Espace CNAPS</th>
         <th>Statut CNAPS</th>
-        <th>Commentaire / Supprimer</th>
+        <th>NUB / Supprimer</th>
       </tr>
     </thead>
     <tbody>
@@ -552,7 +552,7 @@
         </td>
         <td>
           <form>
-            <textarea class="commentaire-input" data-id="{{ r.dossier_id }}" placeholder="Commentaire">{{ r.commentaire or '' }}</textarea>
+            <input type="text" class="nub-input" data-id="{{ r.dossier_id }}" value="{{ r.nub or '' }}" placeholder="NUB">
             <div class="save-hint">Sauvegarde automatique</div>
           </form>
           <form action="/a-traiter/{{ r.id }}/delete" method="post" onsubmit="return confirm('Supprimer ?')">
@@ -898,15 +898,15 @@ filterableRecapCards.forEach(card => {
   });
 });
 
-document.querySelectorAll('.commentaire-input[data-id]').forEach(input => {
+document.querySelectorAll('.nub-input[data-id]').forEach(input => {
   let timeoutId;
   const save = () => {
     const cid = input.dataset.id;
     if (!cid) return;
-    fetch(`/commentaire/${cid}`, {
+    fetch(`/nub/${cid}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commentaire: input.value })
+      body: JSON.stringify({ nub: input.value })
     });
   };
 
