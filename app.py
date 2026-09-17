@@ -2846,23 +2846,35 @@ def serve_upload(request_id, filename):
 @login_required
 def add_request_document(request_id):
     doc_type = (request.form.get("doc_type") or "").strip()
-    incoming = request.files.get("document")
+    incoming_documents = [
+        uploaded_file
+        for uploaded_file in request.files.getlist("documents")
+        if uploaded_file and uploaded_file.filename
+    ]
+
+    # Backwards compatibility for the original single-file form and any saved
+    # browser page that still submits the old field name.
+    if not incoming_documents:
+        incoming = request.files.get("document")
+        if incoming and incoming.filename:
+            incoming_documents = [incoming]
 
     if doc_type not in DOC_LABELS:
         flash("Type de document invalide.", "error")
         return redirect(url_for("request_documents", request_id=request_id))
 
-    if not incoming or not incoming.filename:
-        flash("Veuillez sélectionner un fichier PDF à ajouter.", "error")
+    if not incoming_documents:
+        flash("Veuillez sélectionner au moins un fichier PDF à ajouter.", "error")
         return redirect(url_for("request_documents", request_id=request_id))
 
-    if not incoming.filename.lower().endswith(".pdf"):
-        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
-        return redirect(url_for("request_documents", request_id=request_id))
+    for incoming in incoming_documents:
+        if not incoming.filename.lower().endswith(".pdf"):
+            flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+            return redirect(url_for("request_documents", request_id=request_id))
 
-    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
-        return redirect(url_for("request_documents", request_id=request_id))
+        if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
+            flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+            return redirect(url_for("request_documents", request_id=request_id))
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
@@ -2871,14 +2883,15 @@ def add_request_document(request_id):
             flash("Ce dossier n'existe plus ou a déjà été traité.", "warning")
             return redirect(url_for("a_traiter"))
 
-        original, stored, rel_path = _secure_store(incoming, str(request_id))
-        conn.execute(
-            """
-            INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (request_id, doc_type, original, stored, rel_path),
-        )
+        for incoming in incoming_documents:
+            original, stored, rel_path = _secure_store(incoming, str(request_id))
+            conn.execute(
+                """
+                INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (request_id, doc_type, original, stored, rel_path),
+            )
 
         missing_doc_types = []
         raw_missing_doc_types = (req["missing_doc_types"] or "").strip()
@@ -2896,7 +2909,11 @@ def add_request_document(request_id):
             (json.dumps(remaining_missing_doc_types, ensure_ascii=False), request_id),
         )
 
-    flash(f"Document ajouté : {DOC_LABELS[doc_type]}.", "success")
+    document_count = len(incoming_documents)
+    if document_count == 1:
+        flash(f"Document ajouté : {DOC_LABELS[doc_type]}.", "success")
+    else:
+        flash(f"{document_count} documents ajoutés : {DOC_LABELS[doc_type]}.", "success")
     return redirect(url_for("request_documents", request_id=request_id))
 
 

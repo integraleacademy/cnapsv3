@@ -88,6 +88,38 @@ class AdminDocumentUploadTests(unittest.TestCase):
 
         self.assertEqual(count, 0)
 
+    def test_admin_can_add_multiple_pdf_documents_at_once(self):
+        response = self.client.post(
+            f"/a-traiter/{self.request_id}/documents/add",
+            data={
+                "doc_type": "identity",
+                "documents": [
+                    (io.BytesIO(b"%PDF-1.4\n%recto"), "identite-recto.pdf"),
+                    (io.BytesIO(b"%PDF-1.4\n%verso"), "identite-verso.pdf"),
+                ],
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            docs = conn.execute(
+                "SELECT * FROM request_documents WHERE request_id = ? ORDER BY original_name",
+                (self.request_id,),
+            ).fetchall()
+            missing_doc_types = conn.execute(
+                "SELECT missing_doc_types FROM public_requests WHERE id = ?",
+                (self.request_id,),
+            ).fetchone()[0]
+
+        self.assertEqual(len(docs), 2)
+        self.assertEqual([doc["original_name"] for doc in docs], ["identite-recto.pdf", "identite-verso.pdf"])
+        self.assertTrue(all(doc["doc_type"] == "identity" for doc in docs))
+        self.assertEqual(missing_doc_types, '["proof_address"]')
+
 
 if __name__ == "__main__":
     unittest.main()

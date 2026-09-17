@@ -295,6 +295,43 @@
       align-items: end;
     }
 
+    .manual-upload-card {
+      border: 2px solid #93c5fd;
+      background: linear-gradient(135deg, #eff6ff 0%, #ffffff 72%);
+      box-shadow: 0 10px 24px rgba(29, 78, 216, 0.10);
+      margin-bottom: 22px;
+    }
+
+    .manual-upload-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .manual-upload-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: #dbeafe;
+      color: #1e40af;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .manual-upload-title {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .manual-upload-description {
+      margin: 0 0 14px;
+      color: #475569;
+    }
+
     .field {
       display: grid;
       gap: 6px;
@@ -371,8 +408,12 @@
       {% endif %}
     {% endwith %}
 
-    <div class="doc">
-      <div class="group-title" style="margin:0 0 10px;font-size:20px;">Ajouter un document</div>
+    <div class="doc manual-upload-card" id="ajouter-document">
+      <div class="manual-upload-heading">
+        <span class="manual-upload-badge">Ajout manuel</span>
+        <h2 class="manual-upload-title">Ajouter vous-même un ou plusieurs documents</h2>
+      </div>
+      <p class="manual-upload-description">Choisissez le type de pièce, sélectionnez les fichiers puis importez-les directement dans ce dossier.</p>
       <form class="add-document-form" method="post" action="/a-traiter/{{ req.id }}/documents/add" enctype="multipart/form-data">
         <label class="field">
           Type de document
@@ -383,11 +424,11 @@
           </select>
         </label>
         <label class="field">
-          Fichier PDF
-          <input type="file" name="document" accept="application/pdf,.pdf" required>
+          Fichier(s) PDF
+          <input type="file" name="documents" accept="application/pdf,.pdf" multiple required>
         </label>
-        <button class="btn-primary" type="submit">Ajouter</button>
-        <p class="help">Format accepté : PDF uniquement, taille maximale 5 Mo. Le document ajouté apparaîtra ensuite dans la liste à contrôler.</p>
+        <button class="btn-primary" type="submit">Importer dans le dossier</button>
+        <p class="help">PDF uniquement, 5 Mo maximum par fichier. Les documents importés apparaissent immédiatement dans la liste ci-dessous avec le statut « En attente de traitement ».</p>
       </form>
     </div>
 
