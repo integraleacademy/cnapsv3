@@ -332,6 +332,56 @@
       color: #475569;
     }
 
+    .document-management {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .replace-document-controls {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .replacement-field {
+      display: grid;
+      gap: 6px;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .btn-replace {
+      background: #1d4ed8;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .btn-replace:hover {
+      background: #1e40af;
+      transform: translateY(-1px);
+    }
+
+    .btn-delete {
+      border: 1px solid #fecaca;
+      background: #fff;
+      color: #b91c1c;
+      white-space: nowrap;
+    }
+
+    .btn-delete:hover {
+      background: var(--danger-bg);
+      border-color: #fca5a5;
+      transform: translateY(-1px);
+    }
+
     .field {
       display: grid;
       gap: 6px;
@@ -368,6 +418,18 @@
     @media (max-width: 640px) {
       .add-document-form {
         grid-template-columns: 1fr;
+      }
+
+      .document-management,
+      .replace-document-controls {
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .btn-replace,
+      .btn-delete {
+        width: 100%;
       }
     }
 
@@ -479,10 +541,42 @@
             </div>
 
             <input class="reason" name="reason_{{ d.id }}" value="{{ d.non_conformite_reason or '' }}" placeholder="Précisez la raison si le document est non conforme.">
+
+            <div class="document-management">
+              <div class="replace-document-controls">
+                <label class="replacement-field">
+                  Remplacer ce document
+                  <input type="file" name="document" form="replace-document-{{ d.id }}" accept="application/pdf,.pdf" required>
+                </label>
+                <button class="btn-replace" type="submit" form="replace-document-{{ d.id }}">Importer le remplacement</button>
+              </div>
+              <button
+                class="btn-delete"
+                type="submit"
+                form="delete-document-{{ d.id }}"
+                onclick="return confirm('Supprimer ce document du dossier ?');"
+              >Supprimer</button>
+            </div>
           </div>
         {% endfor %}
       {% endfor %}
     </form>
+
+    {% for doc_type, docs in grouped.items() %}
+      {% for d in docs %}
+        <form
+          id="replace-document-{{ d.id }}"
+          method="post"
+          action="/a-traiter/{{ req.id }}/documents/{{ d.id }}/replace"
+          enctype="multipart/form-data"
+        ></form>
+        <form
+          id="delete-document-{{ d.id }}"
+          method="post"
+          action="/a-traiter/{{ req.id }}/documents/{{ d.id }}/delete"
+        ></form>
+      {% endfor %}
+    {% endfor %}
 
     <form method="post" action="/a-traiter/{{ req.id }}/notify" class="actions">
       <button class="btn-warning" type="submit">Notifier les non-conformités</button>

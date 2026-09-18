@@ -2917,6 +2917,130 @@ def add_request_document(request_id):
     return redirect(url_for("request_documents", request_id=request_id))
 
 
+@app.route("/a-traiter/<int:request_id>/documents/<int:document_id>/replace", methods=["POST"])
+@login_required
+def replace_request_document(request_id, document_id):
+    incoming = request.files.get("document")
+
+    if not incoming or not incoming.filename:
+        flash("Veuillez sélectionner un fichier PDF de remplacement.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    if not incoming.filename.lower().endswith(".pdf"):
+        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
+        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        doc = conn.execute(
+            """
+            SELECT rd.*, pr.missing_doc_types
+            FROM request_documents rd
+            JOIN public_requests pr ON pr.id = rd.request_id
+            WHERE rd.id = ? AND rd.request_id = ? AND rd.is_active = 1
+            """,
+            (document_id, request_id),
+        ).fetchone()
+
+        if not doc:
+            flash("Ce document n'existe plus ou a déjà été remplacé.", "warning")
+            return redirect(url_for("request_documents", request_id=request_id))
+
+        original, stored, rel_path = _secure_store(incoming, str(request_id))
+        conn.execute(
+            "UPDATE request_documents SET is_active = 0 WHERE id = ? AND request_id = ?",
+            (document_id, request_id),
+        )
+        conn.execute(
+            """
+            INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (request_id, doc["doc_type"], original, stored, rel_path),
+        )
+
+        missing_doc_types = []
+        raw_missing_doc_types = (doc["missing_doc_types"] or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing_doc_types = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing_doc_types, list):
+                    missing_doc_types = [item for item in parsed_missing_doc_types if item in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_types = []
+
+        remaining_missing_doc_types = [item for item in missing_doc_types if item != doc["doc_type"]]
+        conn.execute(
+            "UPDATE public_requests SET missing_doc_types = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (json.dumps(remaining_missing_doc_types, ensure_ascii=False), request_id),
+        )
+
+    flash(f"Document remplacé par {original}.", "success")
+    return redirect(url_for("request_documents", request_id=request_id))
+
+
+@app.route("/a-traiter/<int:request_id>/documents/<int:document_id>/delete", methods=["POST"])
+@login_required
+def delete_request_document(request_id, document_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        doc = conn.execute(
+            """
+            SELECT rd.*, pr.missing_doc_types
+            FROM request_documents rd
+            JOIN public_requests pr ON pr.id = rd.request_id
+            WHERE rd.id = ? AND rd.request_id = ? AND rd.is_active = 1
+            """,
+            (document_id, request_id),
+        ).fetchone()
+
+        if not doc:
+            flash("Ce document n'existe plus ou a déjà été supprimé.", "warning")
+            return redirect(url_for("request_documents", request_id=request_id))
+
+        conn.execute(
+            "UPDATE request_documents SET is_active = 0 WHERE id = ? AND request_id = ?",
+            (document_id, request_id),
+        )
+
+        remaining_same_type = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM request_documents
+            WHERE request_id = ? AND doc_type = ? AND is_active = 1
+            """,
+            (request_id, doc["doc_type"]),
+        ).fetchone()[0]
+
+        missing_doc_types = []
+        raw_missing_doc_types = (doc["missing_doc_types"] or "").strip()
+        if raw_missing_doc_types:
+            try:
+                parsed_missing_doc_types = json.loads(raw_missing_doc_types)
+                if isinstance(parsed_missing_doc_types, list):
+                    missing_doc_types = [item for item in parsed_missing_doc_types if item in DOC_LABELS]
+            except json.JSONDecodeError:
+                missing_doc_types = []
+
+        if remaining_same_type == 0:
+            if doc["doc_type"] not in missing_doc_types:
+                missing_doc_types.append(doc["doc_type"])
+        else:
+            missing_doc_types = [item for item in missing_doc_types if item != doc["doc_type"]]
+
+        conn.execute(
+            "UPDATE public_requests SET missing_doc_types = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (json.dumps(missing_doc_types, ensure_ascii=False), request_id),
+        )
+
+    flash(f"Document supprimé du dossier : {doc['original_name']}.", "success")
+    return redirect(url_for("request_documents", request_id=request_id))
+
+
 @app.route("/a-traiter/<int:request_id>/documents/review", methods=["POST"])
 @login_required
 def review_documents(request_id):
