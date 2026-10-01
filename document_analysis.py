@@ -303,6 +303,16 @@ def advisory(result, kind, today):
         and result["identity_checks"]["sharp_text"] in {"pass", "fail"}
         and all(value == "pass" for key, value in result["identity_checks"].items() if key != "sharp_text")
     )
+    soft_blur_only = (
+        result["readability"] in {"clear", "slightly_blurred"}
+        and (result["readability"] == "slightly_blurred" or "blur" in result["problems"] or result["identity_checks"]["sharp_text"] == "fail")
+        and set(result["problems"]) <= {"blur"}
+        and all(result["identity_checks"][key] == "pass" for key in ("whole_document_visible", "no_glare", "no_obstruction"))
+    )
+    if soft_blur_only and not readable_soft_scan:
+        return {"status": "unknown", "title": "Lisibilité à confirmer", "message":
+                "La netteté de l’image ne permet pas de confirmer automatiquement la lecture de tous les champs. "
+                "Vous pouvez conserver ce fichier : notre équipe vérifiera sa lisibilité. Ce résultat n’est pas un refus du document."}
     if not readable_soft_scan and (result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"] or "fail" in result["identity_checks"].values()):
         quality = result["identity_checks"]
         problems = result["problems"]
@@ -465,13 +475,15 @@ def analyze_images(images, kind, api_key, today):
         if inspected["document_type"] == "identity":
             evidence.append({"type": inspected["identity_document"], "sides": inspected["identity_sides"], "confidence": inspected["side_confidence"]})
         answer = advisory(inspected, kind, today)
+        if answer["status"] in {"warning", "unknown"} and len(images) > 1:
+            answer = {**answer, "message": f"Page {number} : " + answer["message"]}
         if answer["status"] == "warning":
-            if len(images) > 1:
-                answer = {**answer, "message": f"Page {number} : " + answer["message"]}
             return answer
         answers.append(answer)
-    if not answers or any(answer["status"] != "success" for answer in answers):
+    if not answers:
         return unavailable(kind)
+    if any(answer["status"] != "success" for answer in answers):
+        return next(answer for answer in answers if answer["status"] != "success")
     return {**answers[0], "identity_evidence": evidence}
 
 
