@@ -136,6 +136,12 @@ flou ou reflété par une zone MRZ ou un autre texte plus net. Un scan lisible a
 peut rester légèrement flou : contrôle les petits caractères avant de décider.
 Identifie identity_document et les faces réellement visibles : carte d'identité identity_card,
 titre de séjour residence_permit, passeport passport. Pour une carte/titre : front et/ou back.
+Le recto comporte généralement la photo principale et les informations d'état civil. Le verso
+contient des informations complémentaires (adresse, autorité/date de délivrance, filiation,
+mentions administratives selon le modèle) et peut ne pas avoir de photo. Identifie aussi les
+anciens modèles de carte française : leur verso peut présenter l'adresse et l'autorité de
+délivrance. La présence d'une zone machine ne suffit pas à déterminer la face : son emplacement
+varie selon le modèle. Ne confonds pas « lisible » et « face reconnue ».
 Deux copies du recto ne sont PAS un recto et un verso. Pour un passeport : passport_biodata
 uniquement si la page avec la photo et les informations d'identité est visible, pas la couverture.
 Une page peut contenir les deux faces d'une même carte : indique alors front ET back.

@@ -2,7 +2,7 @@ import { analyzeDocument } from './document-analysis.mjs';
 import { unavailableMessage, checkPresentation } from './document-check-rules.mjs';
 import { documentCheckModal } from './document-check-modal.mjs';
 import { replacementButton, attachOtherFileActions } from './document-file-actions.mjs';
-import { identityCompleteness } from './identity-completeness.mjs';
+import { identityCompleteness, identityEvidenceLabel } from './identity-completeness.mjs';
 
 function button(label, action, secondary = false) {
   const element = document.createElement('button');
@@ -27,6 +27,9 @@ function cardFor(input, file, kind) {
   const title = document.createElement('strong');
   heading.append(icon, title);
   const message = document.createElement('p');
+  const faces = document.createElement('p');
+  faces.className = 'document-check-evidence';
+  faces.hidden = true;
   const critical = document.createElement('p');
   critical.className = 'document-check-critical';
   critical.hidden = true;
@@ -36,7 +39,7 @@ function cardFor(input, file, kind) {
   const reminder = document.createElement('p');
   reminder.className = 'document-check-note';
   reminder.textContent = "Vérification indicative. Notre équipe effectuera le contrôle final.";
-  card.append(heading, name, message, critical);
+  card.append(heading, name, faces, message, critical);
   if (kind === 'hosting_certificate') {
     const signatureReminder = document.createElement('p');
     signatureReminder.className = 'document-check-signature';
@@ -58,6 +61,10 @@ function cardFor(input, file, kind) {
       title.textContent = result.title || (result.status === 'warning' ? 'Document à vérifier' : result.status === 'success' ? 'Vérification réussie' : 'À vérifier par vos soins');
       message.textContent = result.message;
       message.hidden = !result.message;
+      if (['identity', 'host_identity'].includes(kind) && result.status === 'success') {
+        faces.textContent = identityEvidenceLabel(result);
+        faces.hidden = false;
+      }
       reminder.hidden = kind === 'identity_photo' && result.status === 'success';
       critical.textContent = result.critical || '';
       critical.hidden = !result.critical;

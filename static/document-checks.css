@@ -10,6 +10,7 @@
 }
 .document-check .document-check-filename { display: block; font-size: .78rem; font-weight: 500; opacity: .8; }
 .document-check p { margin: 8px 0; }
+.document-check .document-check-evidence { font-size: .82rem; font-weight: 650; }
 .document-check--success { border-color: #6acb9b; background: linear-gradient(110deg, #eafaf0, #f4fcf7); color: #145637; }
 .document-check--success .document-check-icon { background: #16834b; color: #fff; box-shadow: 0 0 0 4px #d6f2e1; }
 .document-check--success .document-check-heading { color: #116039; }
