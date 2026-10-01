@@ -10,7 +10,10 @@
   const count = guide.querySelector('[data-prep-count]');
 
   function updateProgress() {
-    const active = readyInputs.filter(input => !input.closest('[data-prep-extra]')?.hidden);
+    const active = readyInputs.filter(input => {
+      const extra = input.closest('[data-prep-extra]');
+      return !extra || profiles.some(profile => profile.dataset.prepProfile === extra.dataset.prepExtra && profile.checked);
+    });
     const checked = active.filter(input => input.checked).length;
     count.textContent = `${checked} / ${active.length}`;
     progress.max = active.length;
@@ -28,9 +31,9 @@
       formInput.checked = profile.checked;
       formInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    guide.querySelector(`[data-prep-extra="${profile.dataset.prepProfile}"]`).hidden = !profile.checked;
+    // Instructions for every situation stay visible; selection only adapts the checklist/form.
+    guide.querySelector(`[data-prep-extra="${profile.dataset.prepProfile}"]`).classList.toggle('is-applicable', profile.checked);
     profile.closest('.prep-profile').classList.toggle('is-selected', profile.checked);
-    profile.setAttribute('aria-expanded', String(profile.checked));
     const hosted = document.getElementById('prep-heberge').checked;
     guide.querySelector('[data-prep-address-owner]').textContent = hosted
       ? 'Au nom de votre hébergeant, à l’adresse où vous résidez.' : 'À votre nom et à votre adresse.';
@@ -42,7 +45,17 @@
     document.getElementById(profile.dataset.prepProfile)?.addEventListener('change', () => syncProfile(profile, true));
     syncProfile(profile, true);
   });
-  readyInputs.forEach(input => input.addEventListener('change', updateProgress));
+  readyInputs.forEach(input => input.addEventListener('change', () => {
+    const extra = input.closest('[data-prep-extra]');
+    if (input.checked && extra) {
+      const profile = profiles.find(item => item.dataset.prepProfile === extra.dataset.prepExtra);
+      if (profile && !profile.checked) {
+        profile.checked = true;
+        syncProfile(profile);
+      }
+    }
+    updateProgress();
+  }));
 
   function showForm(open) {
     stage.hidden = !open;
