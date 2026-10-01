@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from PIL import Image
 import app as cnaps_app
+import document_analysis as analysis
 
 
 def photo_file(image_format="JPEG", filename=None):
@@ -108,6 +109,75 @@ class IdentityPhotoTests(unittest.TestCase):
         self.assertLess(html.index('<section class="dossier-photo-overview"'), html.index('id="ajouter-document"'))
         self.assertIn('loading="eager" fetchpriority="high"', html)
         self.assertIn('alt="Photo d\'identité de Photo Test"', html)
+
+    def receipt(self, data, kind, result):
+        with self.client.session_transaction() as sess:
+            sess['document_analysis_token'] = 'receipt-test-session'
+        with cnaps_app.app.test_request_context():
+            analysis.session['document_analysis_token'] = 'receipt-test-session'
+            return analysis.analysis_receipt(result, data, kind)
+
+    def test_public_deposit_keeps_verified_warning_and_unchecked_per_file(self):
+        data = self.payload()
+        identity = {"status": "success", "message": "Informations lisibles", "identity_evidence": [
+            {"type": "identity_card", "sides": ["front", "back"], "confidence": "high"}]}
+        warning = {"status": "warning", "message": "Justificatif de plus de trois mois."}
+        data['document_analysis_receipts'] = [
+            self.receipt(data['identity'][0].getvalue(), 'identity', identity),
+            self.receipt(data['proof_address'][0].getvalue(), 'proof_address', warning),
+        ]
+        self.assertEqual(self.submit(data).status_code, 200)
+        docs = {row['doc_type']: row for row in self.rows('SELECT * FROM request_documents')}
+        self.assertEqual(json.loads(docs['identity']['auto_analysis_json'])['status'], 'success')
+        self.assertEqual(json.loads(docs['proof_address']['auto_analysis_json'])['status'], 'warning')
+        self.assertIsNone(docs['identity_photo']['auto_analysis_json'])
+        self.assertTrue(all(d['is_conforme'] is None and d['review_status'] == 'pending' for d in docs.values()))
+        html = self.admin.get(f"/a-traiter/{docs['identity']['request_id']}/documents").get_data(as_text=True)
+        for text in ('Document vérifié · Tout semble OK', 'Anomalie suspectée', 'Fichier envoyé malgré', 'Document non vérifié', warning['message']):
+            self.assertIn(text, html)
+
+    def test_receipt_cannot_follow_a_different_file_kind_session_or_be_tampered(self):
+        from werkzeug.datastructures import FileStorage
+        data = b'%PDF example'
+        token = self.receipt(data, 'identity', {'status': 'success', 'message': 'Lisible'})
+        for content, kind, session_token, receipt in [
+            (b'%PDF changed', 'identity', 'receipt-test-session', token),
+            (data, 'host_identity', 'receipt-test-session', token),
+            (data, 'identity', 'another-session', token),
+            (data, 'identity', 'receipt-test-session', token + 'x'),
+        ]:
+            with self.subTest(kind=kind, session=session_token), cnaps_app.app.test_request_context(method='POST', data={'document_analysis_receipts': receipt}):
+                analysis.session['document_analysis_token'] = session_token
+                stream = io.BytesIO(content)
+                self.assertIsNone(analysis.submitted_analysis(FileStorage(stream=stream), kind))
+                self.assertEqual(stream.tell(), 0)
+
+    def test_initial_deposit_keeps_missing_verso_alert_despite_readable_file(self):
+        data = self.payload()
+        result = {"status": "success", "message": "Fichier lisible", "identity_evidence": [
+            {"type": "identity_card", "sides": ["front"], "confidence": "high"}]}
+        data['document_analysis_receipts'] = self.receipt(data['identity'][0].getvalue(), 'identity', result)
+        self.submit(data)
+        saved = json.loads(self.rows("SELECT auto_analysis_json FROM request_documents WHERE doc_type='identity'")[0][0])
+        self.assertEqual(saved['status'], 'warning')
+        self.assertIn('verso manquant', saved['message'])
+
+    def test_public_replacement_keeps_its_own_result_and_admin_replacement_resets_it(self):
+        request_id = self.create_request()
+        original = self.rows("SELECT * FROM request_documents WHERE doc_type='proof_address'")[0]
+        with sqlite3.connect(cnaps_app.DB_NAME) as conn:
+            conn.execute("UPDATE request_documents SET review_status='notified_expected' WHERE id=?", (original['id'],))
+        content = b'%PDF replacement'
+        token = self.receipt(content, 'proof_address', {'status': 'unknown', 'message': 'Date incertaine'})
+        response = self.client.post(f'/replace-documents/{request_id}', data={
+            f"replace_{original['id']}": (io.BytesIO(content), 'new.pdf'), 'document_analysis_receipts': token}, content_type='multipart/form-data')
+        self.assertEqual(response.status_code, 200)
+        replacement = self.rows("SELECT * FROM request_documents WHERE doc_type='proof_address' AND is_active=1")[0]
+        self.assertEqual(json.loads(replacement['auto_analysis_json'])['status'], 'unknown')
+        self.assertIn('Vérification non concluante', self.admin.get(f'/a-traiter/{request_id}/documents').get_data(as_text=True))
+        self.admin.post(f"/a-traiter/{request_id}/documents/{replacement['id']}/replace", data={
+            'document': (io.BytesIO(b'%PDF admin replacement'), 'admin.pdf')}, content_type='multipart/form-data')
+        self.assertIsNone(self.rows("SELECT auto_analysis_json FROM request_documents WHERE doc_type='proof_address' AND is_active=1")[0][0])
 
     def test_photo_is_required_server_side(self):
         response = self.submit(self.payload(include_photo=False))

@@ -23,7 +23,7 @@ import hmac
 import logging
 import warnings
 from PIL import Image, UnidentifiedImageError
-from document_analysis import register_document_analysis
+from document_analysis import register_document_analysis, submitted_analysis, admin_analysis, record_identity_group_alerts
 
 
 
@@ -342,6 +342,9 @@ def init_db():
 
         if not _table_has_column(conn, "request_documents", "review_status"):
             conn.execute("ALTER TABLE request_documents ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'")
+
+        if not _table_has_column(conn, "request_documents", "auto_analysis_json"):
+            conn.execute("ALTER TABLE request_documents ADD COLUMN auto_analysis_json TEXT")
 
         conn.execute(
             """
@@ -2322,6 +2325,17 @@ def _secure_store(file_storage, subfolder):
     return original, safe_name, os.path.relpath(absolute_path, UPLOAD_DIR)
 
 
+def _store_public_document(conn, request_id, doc_type, upload):
+    analysis = submitted_analysis(upload, doc_type)
+    original, stored, rel_path = _secure_store(upload, str(request_id))
+    conn.execute(
+        """INSERT INTO request_documents
+           (request_id, doc_type, original_name, stored_name, storage_path, auto_analysis_json)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (request_id, doc_type, original, stored, rel_path, analysis),
+    )
+
+
 def _file_size_bytes(file_storage):
     stream = file_storage.stream
     current_pos = stream.tell()
@@ -2503,14 +2517,8 @@ def public_form():
 
         for doc_type, files in uploaded.items():
             for f in files:
-                original, stored, rel_path = _secure_store(f, str(request_id))
-                conn.execute(
-                    """
-                    INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (request_id, doc_type, original, stored, rel_path),
-                )
+                _store_public_document(conn, request_id, doc_type, f)
+        record_identity_group_alerts(conn, request_id)
 
     email_html = render_template(
         "emails/confirmation_depot.html",
@@ -2858,7 +2866,9 @@ def request_documents(request_id):
 
     grouped = {}
     for d in docs:
-        grouped.setdefault(d["doc_type"], []).append(d)
+        document = dict(d)
+        document["auto_analysis"] = admin_analysis(document.get("auto_analysis_json"))
+        grouped.setdefault(d["doc_type"], []).append(document)
 
     present_doc_types = {d["doc_type"] for d in docs}
     missing_doc_type_options = [doc_type for doc_type in DOC_LABELS if doc_type not in present_doc_types]
@@ -3264,28 +3274,14 @@ def replace_documents(request_id):
                 incoming = request.files.get(f"replace_{doc['id']}")
                 if incoming and incoming.filename:
                     conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
-                    original, stored, rel_path = _secure_store(incoming, str(request_id))
-                    conn.execute(
-                        """
-                        INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (request_id, doc["doc_type"], original, stored, rel_path),
-                    )
+                    _store_public_document(conn, request_id, doc["doc_type"], incoming)
                     replaced += 1
 
             remaining_missing_doc_types = []
             for doc_type in missing_doc_types:
                 incoming = request.files.get(f"missing_{doc_type}")
                 if incoming and incoming.filename:
-                    original, stored, rel_path = _secure_store(incoming, str(request_id))
-                    conn.execute(
-                        """
-                        INSERT INTO request_documents (request_id, doc_type, original_name, stored_name, storage_path)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (request_id, doc_type, original, stored, rel_path),
-                    )
+                    _store_public_document(conn, request_id, doc_type, incoming)
                     replaced += 1
                 else:
                     remaining_missing_doc_types.append(doc_type)

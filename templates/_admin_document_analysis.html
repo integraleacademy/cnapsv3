@@ -1,0 +1,23 @@
+{% macro analysis_badge(analysis) %}
+  {% set state = analysis.status %}
+  <div class="auto-check auto-check--{{ state }}">
+    <span class="auto-check-label">Contrôle automatique</span>
+    <span class="auto-check-badge">
+      {% if state == 'success' %}<span aria-hidden="true">✓</span> Document vérifié · Tout semble OK
+      {% elif state == 'warning' %}<span aria-hidden="true">!</span> Document vérifié · Anomalie suspectée
+      {% elif state in ['unknown', 'info'] %}<span aria-hidden="true">?</span> Vérification non concluante
+      {% else %}<span aria-hidden="true">—</span> Document non vérifié{% endif %}
+    </span>
+    {% if state == 'warning' %}<p class="auto-check-kept">Fichier envoyé malgré l’alerte affichée dans le formulaire.</p>{% endif %}
+    {% if state != 'unchecked' %}
+      <details class="auto-check-detail">
+        <summary>Voir le résultat{% if analysis.checked_label %} · {{ analysis.checked_label }}{% endif %}</summary>
+        <p>{{ analysis.message }}</p>
+        {% if analysis.critical %}<p>{{ analysis.critical }}</p>{% endif %}
+        <p class="auto-check-note">Contrôle indicatif au moment du dépôt. La décision de conformité reste à votre charge.</p>
+      </details>
+    {% else %}
+      <p class="auto-check-note">Aucun résultat automatique enregistré pour ce fichier.</p>
+    {% endif %}
+  </div>
+{% endmacro %}

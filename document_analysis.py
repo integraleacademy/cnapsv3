@@ -21,7 +21,8 @@ from zoneinfo import ZoneInfo
 
 import pypdfium2 as pdfium
 from PIL import Image, ImageOps
-from flask import jsonify, request, session
+from flask import current_app, jsonify, request, session
+from itsdangerous import BadData, URLSafeTimedSerializer
 from werkzeug.exceptions import RequestEntityTooLarge
 
 
@@ -550,6 +551,85 @@ def reserve_usage(db_path, token, now, units=1):
     return True
 
 
+def analysis_receipt(result, data, kind):
+    """Bind the advisory to these exact bytes, kind and submitting session."""
+    payload = {
+        "file_hash": hashlib.sha256(data).hexdigest(), "kind": kind,
+        "session_hash": hashlib.sha256(session["document_analysis_token"].encode()).hexdigest(),
+        "checked_at": datetime.now(FRANCE_TZ).isoformat(timespec="seconds"),
+        "result": result,
+    }
+    return URLSafeTimedSerializer(current_app.secret_key, salt="document-analysis-v1").dumps(payload)
+
+
+def submitted_analysis(upload, kind):
+    """Never accept a client-supplied status or a receipt for a replaced file."""
+    tokens = request.form.getlist("document_analysis_receipts")[:40]
+    if not tokens or not session.get("document_analysis_token"):
+        return None
+    position = upload.stream.tell()
+    try:
+        upload.stream.seek(0)
+        data = upload.stream.read(MAX_BYTES + 1)
+    finally:
+        upload.stream.seek(position)
+    if not data or len(data) > MAX_BYTES:
+        return None
+    digest = hashlib.sha256(data).hexdigest()
+    session_hash = hashlib.sha256(session["document_analysis_token"].encode()).hexdigest()
+    signer = URLSafeTimedSerializer(current_app.secret_key, salt="document-analysis-v1")
+    for token in tokens:
+        if len(token) > 16000:
+            continue
+        try:
+            saved = signer.loads(token, max_age=86400)
+        except BadData:
+            continue
+        if (saved.get("file_hash") == digest and saved.get("kind") == kind
+                and saved.get("session_hash") == session_hash):
+            return json.dumps({"checked_at": saved["checked_at"], **saved["result"]}, ensure_ascii=False)
+    return None
+
+
+def admin_analysis(raw):
+    try:
+        result = json.loads(raw or "null")
+        if not isinstance(result, dict) or result.get("status") not in {"success", "warning", "unknown", "info"}:
+            return {"status": "unchecked"}
+        result["checked_label"] = datetime.fromisoformat(result["checked_at"]).astimezone(FRANCE_TZ).strftime("%d/%m/%Y à %H:%M")
+        return result
+    except (ValueError, TypeError, KeyError):
+        return {"status": "unchecked"}
+
+
+def record_identity_group_alerts(conn, request_id):
+    """Persist the same missing-face alert shown for a complete initial deposit."""
+    for kind in ("identity", "host_identity"):
+        rows = conn.execute("SELECT id, auto_analysis_json FROM request_documents WHERE request_id = ? AND doc_type = ? AND is_active = 1", (request_id, kind)).fetchall()
+        results = [(row[0], admin_analysis(row[1])) for row in rows]
+        if not results or any(result["status"] != "success" for _, result in results):
+            continue
+        evidence = [item for _, result in results for item in result.get("identity_evidence", [])]
+        known = [item for item in evidence if item.get("confidence") == "high" and item.get("sides")]
+        if any(item["type"] == "passport" and "passport_biodata" in item["sides"] for item in known):
+            continue
+        sides = {kind: {side for item in known if item["type"] == kind for side in item["sides"]}
+                 for kind in ("identity_card", "residence_permit")}
+        if any({"front", "back"} <= present for present in sides.values()):
+            continue
+        status, message = "unknown", "Les fichiers sont lisibles, mais les faces de la pièce d’identité n’ont pas pu être confirmées."
+        if len(known) == len(evidence) and all(result.get("identity_evidence") for _, result in results):
+            for present in sides.values():
+                if "front" in present or "back" in present:
+                    missing = "verso" if "front" in present else "recto"
+                    status, message = "warning", f"Fichier lisible, mais {missing} manquant lors de l’envoi du dossier."
+                    break
+        for document_id, result in results:
+            result.update(status=status, message=message, title="Contrôle du recto et du verso")
+            result.pop("checked_label", None)
+            conn.execute("UPDATE request_documents SET auto_analysis_json = ? WHERE id = ?", (json.dumps(result, ensure_ascii=False), document_id))
+
+
 def register_document_analysis(app, db_path):
     def form_token():
         if not session.get("document_analysis_token"):
@@ -604,6 +684,7 @@ def register_document_analysis(app, db_path):
                 if not reserve_usage(db_path(), token, now, units=units):
                     return jsonify(unavailable(kind)), 429
                 result = analyze_images(images, kind, api_key, today)
+                result = {**result, "receipt": analysis_receipt(result, data, kind)}
                 with _cache_lock:
                     _cache[key] = (now, result)
                     _cache.move_to_end(key)
