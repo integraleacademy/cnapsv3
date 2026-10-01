@@ -6,7 +6,7 @@
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='strict-4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='accordion-1') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -204,6 +204,15 @@
       .section { padding: 14px; }
     }
   </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-upload-layout.css', v='accordion-1') }}">
+  <style>
+    body { background:#f6f8fb; color:#0f172a; }
+    .wrap { max-width:1180px; padding:22px; background:transparent; border:0; box-shadow:none; }
+    .header { border:0; padding:8px 10px 12px; }
+    .header img { width:96px; }
+    .section { padding:22px; border-color:#e5ebf3; border-radius:20px; background:#fff; box-shadow:0 14px 34px rgba(15,23,42,.04); }
+    @media(max-width:640px) { body { padding:12px 0; } .wrap { padding:12px; } .section { padding:16px; } }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -215,8 +224,9 @@
     {% with messages = get_flashed_messages(with_categories=true, category_filter=['public_error']) %}
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
+    {% from "_document_upload_row.html" import document_row %}
     {% set fd = form_data if form_data is defined else {} %}
-    <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
+    <form method="post" enctype="multipart/form-data" data-document-layout data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
       <div class="section">
         <div class="section-badge">👤 Étape 1</div>
         <h2>Informations personnelles</h2>
@@ -228,59 +238,60 @@
           <div><label>Téléphone portable</label><input type="tel" name="telephone" value="{{ fd.get('telephone', '') }}" required></div>
           <div><label>Date de naissance (DD/MM/YYYY)</label><input id="date_naissance" name="date_naissance" value="{{ fd.get('date_naissance', '') }}" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" required></div>
         </div>
-      </div>
-      <div class="section">
-        <div class="section-badge">📄 Étape 2</div>
-        <h2>Documents à déposer</h2>
-        <p class="hint">À la sélection, votre photo, les pièces d’identité (la vôtre et celle de votre hébergeant), le justificatif de domicile et l’attestation d’hébergement sont transmis à OpenAI pour une vérification indicative. Les alertes ne bloquent pas l’envoi ; notre équipe effectuera le contrôle final.</p>
-        <section class="identity-photo-card" aria-labelledby="photo-title">
-          <h3 class="photo-heading" id="photo-title">📷 Photo d'identité officielle <span class="photo-required">Obligatoire</span></h3>
-          <p class="photo-subtitle">Photo de face de votre visage sur fond neutre — JPEG ou PNG.</p>
-          {% include '_identity_photo_guidance.html' %}
-          <label for="identity_photo">Déposer ma photo d'identité</label>
-          <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-document-check="identity_photo" data-identity-photo required>
-        </section>
-        <label>Carte d’identité ou titre de séjour RECTO VERSO, ou passeport (page avec photo)</label>
-        <p class="hint">Carte d’identité ou titre de séjour : les deux faces, dans un seul PDF ou dans deux fichiers séparés. Passeport : uniquement la page d’identité avec la photo.</p>
-        <input type="file" name="identity" accept="application/pdf,.pdf" data-document-check="identity" multiple required>
-        <div class="upload-status" data-upload-status="identity"></div>
-        <label>Justificatif de domicile de moins de 3 mois</label>
-        <p class="hint">Facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou quittance de loyer, de moins de 3 mois. Les factures de téléphone mobile et d’Internet (y compris box avec téléphone fixe) sont refusées.</p>
-        <input type="file" name="proof_address" accept="application/pdf,.pdf" data-document-check="proof_address" required>
-        <div class="upload-status" data-upload-status="proof_address"></div>
-      </div>
-      <div class="section">
-        <div class="section-badge">🧩 Étape 3</div>
-        <h2>Documents complémentaires</h2>
         <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto" {% if fd.get('heberge') == 'on' %}checked{% endif %}><label for="heberge">Cochez la case si vous êtes hébergé(e)</label></div>
-        <div id="heberge_bloc" class="hidden">
-          <label>HÉBERGEANT — Carte d’identité ou titre de séjour RECTO VERSO, ou passeport (page avec photo)</label>
-          <input type="file" name="host_identity" accept="application/pdf,.pdf" data-document-check="host_identity" multiple>
-          <div class="upload-status" data-upload-status="host_identity"></div>
-          <label>Attestation d'hébergement signée</label>
-          <p class="hint">Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank">service-public.gouv.fr</a></p>
-          <input type="file" name="hosting_certificate" accept="application/pdf,.pdf" data-document-check="hosting_certificate">
-          <div class="upload-status" data-upload-status="hosting_certificate"></div>
-        </div>
         <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto" {% if fd.get('non_francais') == 'on' %}checked{% endif %}><label for="non_francais">Cochez la case si vous n'avez pas la nationalité française</label></div>
-        <div id="non_francais_bloc" class="hidden">
-          <label>Casier judiciaire du pays de naissance (moins de 3 mois, traduit)</label>
-          <input type="file" name="criminal_record" accept="application/pdf,.pdf">
-          <div class="upload-status" data-upload-status="criminal_record"></div>
-          <label>Diplôme français supérieur au brevet ou Test TCF officiel (moins de 2 ans)</label>
-          <input type="file" name="french_diploma_tcf" accept="application/pdf,.pdf">
-          <div class="upload-status" data-upload-status="french_diploma_tcf"></div>
-        </div>
       </div>
+      <details class="documents-upload-card" open>
+        <summary class="collapse-summary">
+          <span class="saas-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M9 15h6M9 18h3"/></svg></span>
+          <span class="card-kicker">Documents à déposer</span>
+          <span class="documents-summary-progress" data-upload-progress>
+            <span data-progress-label>0/3 déposés</span>
+            <span class="documents-summary-progress-track" aria-hidden="true"><span class="documents-summary-progress-fill" data-progress-fill></span></span>
+            <span data-progress-percent>0%</span>
+          </span>
+        </summary>
+        <div class="collapse-content">
+          {% set document_count = 3 + (2 if fd.get('heberge') == 'on' else 0) + (2 if fd.get('non_francais') == 'on' else 0) %}
+          {% include '_document_upload_progress.html' %}
+          <div class="docs-stack">
+            {% call document_row('identity', 'Passeport OU Carte d’identité recto/verso OU Titre de séjour', 'identity', multiple=true) %}
+              <p class="hint">PDF uniquement · 5 Mo maximum par fichier.<br>Carte d’identité ou titre de séjour : les deux faces, dans un seul PDF ou dans deux fichiers séparés. Passeport : uniquement la page d’identité avec la photo.</p>
+            {% endcall %}
+            {% call document_row('identity_photo', 'Photo d’identité officielle (photo de face de votre visage sur fond neutre)', 'identity_photo', photo=true) %}
+              {% include '_identity_photo_guidance.html' %}
+            {% endcall %}
+            {% call document_row('proof_address', 'Justificatif de domicile de moins de 3 mois', 'proof_address') %}
+              <p class="hint">PDF uniquement · 5 Mo maximum.<br>Facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou quittance de loyer, de moins de 3 mois. Les factures de téléphone mobile et d’Internet (y compris box avec téléphone fixe) sont refusées.</p>
+            {% endcall %}
+            <div id="heberge_bloc" class="conditional-docs hidden">
+              {% call document_row('host_identity', 'Pièce d’identité de la personne qui vous héberge', 'host_identity', multiple=true, required=false) %}
+                <p class="hint">PDF uniquement · 5 Mo maximum par fichier.<br>Carte d’identité ou titre de séjour : recto et verso, dans un ou deux fichiers. Passeport : page d’identité avec photo.</p>
+              {% endcall %}
+              {% call document_row('hosting_certificate', 'Attestation d’hébergement signée', 'hosting_certificate', required=false) %}
+                <p class="hint">PDF uniquement · 5 Mo maximum.<br>Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank" rel="noopener">service-public.gouv.fr</a></p>
+              {% endcall %}
+            </div>
+            <div id="non_francais_bloc" class="conditional-docs hidden">
+              {% call document_row('criminal_record', 'Casier judiciaire du pays de naissance', required=false) %}
+                <p class="hint">PDF uniquement · 5 Mo maximum.<br>Le document doit dater de moins de 3 mois et être traduit en français.</p>
+              {% endcall %}
+              {% call document_row('french_diploma_tcf', 'Diplôme français ou Test TCF officiel', required=false) %}
+                <p class="hint">PDF uniquement · 5 Mo maximum.<br>Diplôme français supérieur au brevet ou Test TCF officiel de moins de 2 ans.</p>
+              {% endcall %}
+            </div>
+          </div>
+        </div>
+      </details>
       <div class="section checks">
-        <div class="section-badge">✅ Étape 4</div>
+        <div class="section-badge">✅ Étape 3</div>
         <h2>Contrôle de conformité</h2>
         {% for item in checklist_labels %}
         <label><input type="checkbox" name="{{ item }}" style="width:auto" required {% if fd.get(item) == 'on' %}checked{% endif %}> {{ item }}</label>
         {% endfor %}
       </div>
       <div class="section">
-        <div class="section-badge">🚀 Étape 5</div>
+        <div class="section-badge">🚀 Étape 4</div>
         <h2>Envoyer ma demande</h2>
         <button class="btn" type="submit">Envoyer ma demande</button>
       </div>
@@ -413,6 +424,6 @@
   </script>
   {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='strict-4') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='accordion-1') }}"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='strict-4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='accordion-1') }}">
   <title>Remplacement des documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -176,6 +176,7 @@
       .logo-wrap { width: 52px; height: 52px; }
     }
   </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-upload-layout.css', v='accordion-1') }}">
 </head>
 <body>
   <main class="container">
@@ -204,33 +205,37 @@
         {% endfor %}
       {% endwith %}
 
-      <form method="post" enctype="multipart/form-data" data-identity-partial="true" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
-        <p class="file-help">À la sélection, votre photo, les pièces d’identité (la vôtre et celle de votre hébergeant), le justificatif de domicile et l’attestation d’hébergement sont transmis à OpenAI pour une vérification indicative. Les alertes ne bloquent pas l’envoi ; notre équipe effectuera le contrôle final.</p>
-        {% for d in invalids %}
-          <section class="doc-card">
-            <div class="doc-title">{{ labels.get(d.doc_type, d.doc_type) }}</div>
-            <div class="reason">⚠️ Raison : {{ d.non_conformite_reason or 'Non précisée' }}</div>
-            {% if d.doc_type == 'identity_photo' %}
-              {% include '_identity_photo_guidance.html' %}
-            {% else %}
-              <p class="file-help">Choisissez une version nette et complète du document au format PDF.</p>
-            {% endif %}
-            <input type="file" name="replace_{{ d.id }}" aria-label="{{ labels.get(d.doc_type, d.doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if d.doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if d.doc_type == 'identity_photo' %}data-identity-photo{% endif %} {% if d.doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate', 'identity_photo'] %}data-document-check="{{ d.doc_type }}"{% endif %} required>
-          </section>
-        {% endfor %}
-
-        {% for doc_type in missing_doc_types %}
-          <section class="doc-card">
-            <div class="doc-title">{{ labels.get(doc_type, doc_type) }}</div>
-            <div class="reason">⚠️ Document manquant</div>
-            {% if doc_type == 'identity_photo' %}
-              {% include '_identity_photo_guidance.html' %}
-            {% else %}
-              <p class="file-help">Ajoutez le document demandé au format PDF.</p>
-            {% endif %}
-            <input type="file" name="missing_{{ doc_type }}" aria-label="{{ labels.get(doc_type, doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if doc_type == 'identity_photo' %}data-identity-photo{% endif %} {% if doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate', 'identity_photo'] %}data-document-check="{{ doc_type }}"{% endif %} required>
-          </section>
-        {% endfor %}
+      {% from "_document_upload_row.html" import document_row %}
+      <form method="post" enctype="multipart/form-data" data-document-layout data-identity-partial="true" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
+        <div class="documents-upload-card">
+          <div class="collapse-content">
+            {% set document_count = invalids|length + missing_doc_types|length %}
+            {% include '_document_upload_progress.html' %}
+            <div class="docs-stack">
+              {% for d in invalids %}
+                {% set checked_kind = d.doc_type if d.doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate', 'identity_photo'] else '' %}
+                {% call document_row('replace_' ~ d.id, labels.get(d.doc_type, d.doc_type), checked_kind, photo=(d.doc_type == 'identity_photo')) %}
+                  <div class="reason">⚠️ Raison : {{ d.non_conformite_reason or 'Non précisée' }}</div>
+                  {% if d.doc_type == 'identity_photo' %}
+                    {% include '_identity_photo_guidance.html' %}
+                  {% else %}
+                    <p class="file-help">Choisissez une version nette et complète du document au format PDF.</p>
+                  {% endif %}
+                {% endcall %}
+              {% endfor %}
+              {% for doc_type in missing_doc_types %}
+                {% set checked_kind = doc_type if doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate', 'identity_photo'] else '' %}
+                {% call document_row('missing_' ~ doc_type, labels.get(doc_type, doc_type), checked_kind, photo=(doc_type == 'identity_photo')) %}
+                  {% if doc_type == 'identity_photo' %}
+                    {% include '_identity_photo_guidance.html' %}
+                  {% else %}
+                    <p class="file-help">Ajoutez le document demandé au format PDF.</p>
+                  {% endif %}
+                {% endcall %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
 
         <button class="submit-btn" type="submit">Envoyer les nouveaux documents</button>
       </form>
@@ -238,6 +243,6 @@
   </main>
   {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='strict-4') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='accordion-1') }}"></script>
 </body>
 </html>
