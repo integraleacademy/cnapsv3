@@ -3,6 +3,7 @@ import { unavailableMessage, checkPresentation } from './document-check-rules.mj
 import { documentCheckModal } from './document-check-modal.mjs';
 import { replacementButton, attachOtherFileActions } from './document-file-actions.mjs';
 import { identityCompleteness, identityEvidenceLabel } from './identity-completeness.mjs';
+import { attachDocumentUploadLayout, setDocumentRowResult } from './document-upload-layout.mjs';
 
 function button(label, action, secondary = false) {
   const element = document.createElement('button');
@@ -14,6 +15,7 @@ function button(label, action, secondary = false) {
 }
 
 function cardFor(input, file, kind) {
+  const compact = Boolean(input.closest('[data-document-row]'));
   const card = document.createElement('div');
   card.className = 'document-check document-check--pending';
   const name = document.createElement('strong');
@@ -60,12 +62,13 @@ function cardFor(input, file, kind) {
       icon.textContent = result.status === 'success' ? '✓' : result.status === 'warning' ? '!' : 'i';
       title.textContent = result.title || (result.status === 'warning' ? 'Document à vérifier' : result.status === 'success' ? 'Vérification réussie' : 'À vérifier par vos soins');
       message.textContent = result.message;
-      message.hidden = !result.message;
+      message.hidden = !result.message || (compact && result.status === 'success');
+      heading.hidden = compact && ['identity', 'host_identity'].includes(kind) && result.status === 'success';
       if (['identity', 'host_identity'].includes(kind) && result.status === 'success') {
         faces.textContent = identityEvidenceLabel(result);
-        faces.hidden = false;
+        faces.hidden = compact;
       }
-      reminder.hidden = kind === 'identity_photo' && result.status === 'success';
+      reminder.hidden = compact || (kind === 'identity_photo' && result.status === 'success');
       critical.textContent = result.critical || '';
       critical.hidden = !result.critical;
       actions.replaceChildren(replacementButton(input, file));
@@ -83,6 +86,7 @@ function cardFor(input, file, kind) {
 
 export function attachDocumentChecks(root = document, analyze = analyzeDocument) {
   const modal = documentCheckModal(root);
+  attachDocumentUploadLayout(root);
   attachOtherFileActions(root);
   const identityGroups = new Map();
   const identityState = new Map();
@@ -100,14 +104,20 @@ export function attachDocumentChecks(root = document, analyze = analyzeDocument)
     }
     const results = Array.from(identityState.values()).filter(state => state.input.form === group.form && state.kind === kind).flatMap(state => state.results);
     const result = identityCompleteness(results, { partial: input.form?.dataset.identityPartial === 'true' });
+    for (const state of identityState.values()) {
+      if (state.input.form === group.form && state.kind === kind) setDocumentRowResult(state.input, result);
+    }
     group.element.replaceChildren();
     group.element.hidden = !result;
     if (!result) return;
+    const compact = Boolean(input.closest('[data-document-row]'));
+    if (compact && (result.status === 'pending' || (!result.missing && results.some(item => item?.status !== 'success')))) group.element.hidden = true;
     group.element.className = `identity-completeness document-check document-check--${result.status}`;
     const title = document.createElement('strong'); title.textContent = result.title;
     const message = document.createElement('p'); message.textContent = result.message;
+    message.hidden = compact && result.status === 'success';
     group.element.append(title, message);
-    if (result.missing && input.multiple) group.element.append(button(`Ajouter le ${result.missing}`, () => {
+    if (result.missing && input.multiple && !compact) group.element.append(button(`Ajouter le ${result.missing}`, () => {
       delete input.dataset.replaceFileKey;
       input.click();
     }));
@@ -139,6 +149,7 @@ export function attachDocumentChecks(root = document, analyze = analyzeDocument)
       if (identity) { identityState.set(input, state); refreshIdentity(input, kind); }
       const record = (index, result) => {
         if (identity) { state.results[index] = result; refreshIdentity(input, kind); }
+        else setDocumentRowResult(input, result);
       };
       for (const [index, file] of files.entries()) {
         const card = cardFor(input, file, kind);

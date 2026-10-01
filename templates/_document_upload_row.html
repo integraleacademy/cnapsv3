@@ -1,0 +1,13 @@
+{% macro document_row(name, label, kind='', multiple=false, required=true, photo=false) -%}
+<details class="docrow missing" data-document-row id="document-{{ name }}">
+  <summary class="docrow-summary">
+    <span class="docrow-summary-title">{{ label }}</span>
+    <span class="docrow-summary-status" data-document-status>À déposer</span>
+  </summary>
+  <div class="docmeta">
+    {{ caller() }}
+    <label for="{{ name }}" class="upload-label">{{ 'Déposer ma photo d’identité' if photo else 'Déposer ce document' }}</label>
+    <input type="file" id="{{ name }}" name="{{ name }}" aria-label="{{ label }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if photo else 'application/pdf,.pdf' }}"{% if kind %} data-document-check="{{ kind }}"{% endif %}{% if multiple %} multiple{% endif %}{% if photo %} data-identity-photo{% endif %}{% if required %} required{% endif %}>
+  </div>
+</details>
+{%- endmacro %}

@@ -4,7 +4,7 @@ export function replacementButton(input, file) {
   const button = input.ownerDocument.createElement('button');
   button.type = 'button';
   button.className = 'document-check-button';
-  button.textContent = 'Remplacer ce fichier';
+  button.textContent = input.closest('[data-document-row]') ? 'Remplacer' : 'Remplacer ce fichier';
   button.setAttribute('aria-label', `Remplacer ${file.name}`);
   button.addEventListener('click', () => { input.dataset.replaceFileKey = fileKey(file); input.click(); });
   return button;
