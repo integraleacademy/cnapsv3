@@ -6,7 +6,7 @@
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='visual-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='strict-3') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -240,11 +240,12 @@
           <label for="identity_photo">Déposer ma photo d'identité</label>
           <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-document-check="identity_photo" data-identity-photo required>
         </section>
-        <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
+        <label>Carte d’identité ou titre de séjour RECTO VERSO, ou passeport (page avec photo)</label>
+        <p class="hint">Carte d’identité ou titre de séjour : les deux faces, dans un seul PDF ou dans deux fichiers séparés. Passeport : uniquement la page d’identité avec la photo.</p>
         <input type="file" name="identity" accept="application/pdf,.pdf" data-document-check="identity" multiple required>
         <div class="upload-status" data-upload-status="identity"></div>
         <label>Justificatif de domicile de moins de 3 mois</label>
-        <p class="hint">Uniquement facture gaz/électricité/eau ou quittance de loyer (pas téléphone).</p>
+        <p class="hint">Facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou quittance de loyer, de moins de 3 mois. Les factures de téléphone mobile et d’Internet (y compris box avec téléphone fixe) sont refusées.</p>
         <input type="file" name="proof_address" accept="application/pdf,.pdf" data-document-check="proof_address" required>
         <div class="upload-status" data-upload-status="proof_address"></div>
       </div>
@@ -253,7 +254,7 @@
         <h2>Documents complémentaires</h2>
         <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto" {% if fd.get('heberge') == 'on' %}checked{% endif %}><label for="heberge">Cochez la case si vous êtes hébergé(e)</label></div>
         <div id="heberge_bloc" class="hidden">
-          <label>HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
+          <label>HÉBERGEANT — Carte d’identité ou titre de séjour RECTO VERSO, ou passeport (page avec photo)</label>
           <input type="file" name="host_identity" accept="application/pdf,.pdf" data-document-check="host_identity" multiple>
           <div class="upload-status" data-upload-status="host_identity"></div>
           <label>Attestation d'hébergement signée</label>
@@ -412,6 +413,6 @@
   </script>
   {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='visual-2') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='strict-3') }}"></script>
 </body>
 </html>

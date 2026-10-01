@@ -22,6 +22,9 @@ def model_result(**changes):
         "all_fields_legible": True, "problems": [],
         "photo_criteria": {key: "not_applicable" for key in checks.PHOTO_CRITERIA},
         "signature": "not_applicable", "signature_confidence": "low",
+        "address_kind": "water", "address_kind_confidence": "high",
+        "identity_document": "identity_card", "identity_sides": ["front"], "side_confidence": "high",
+        "identity_checks": {key: "pass" for key in checks.IDENTITY_CHECKS},
     }
     result.update(changes)
     return result
@@ -37,6 +40,50 @@ def blank_pdf(pages=1):
 
 
 class AdvisoryTests(unittest.TestCase):
+    def test_only_accepted_address_types_can_be_green_and_date_still_matters(self):
+        for kind in checks.ADDRESS_KINDS:
+            fields = model_result(document_type="address", address_kind=kind, document_date="2026-09-30", date_kind="invoice", date_confidence="high")
+            answer = checks.advisory(fields, "proof_address", date(2026, 10, 1))
+            expected = "success" if kind in checks.ACCEPTED_ADDRESS_KINDS else "unknown" if kind == "uncertain" else "warning"
+            self.assertEqual(answer["status"], expected, kind)
+            if expected == "success":
+                fields["document_date"] = "2026-07-01"
+                self.assertEqual(checks.advisory(fields, "proof_address", date(2026, 10, 1))["status"], "warning")
+        fields = model_result(document_type="address", address_kind="landline", address_kind_confidence="low", document_date="2026-09-30", date_kind="invoice", date_confidence="high")
+        self.assertEqual(checks.advisory(fields, "proof_address", date(2026, 10, 1))["status"], "unknown")
+
+    def test_every_quality_criterion_can_veto_otherwise_readable_identity(self):
+        for key in checks.IDENTITY_CHECKS:
+            for value, expected in [("fail", "warning"), ("uncertain", "unknown"), ("not_applicable", "unknown")]:
+                fields = model_result(identity_checks={criterion: value if criterion == key else "pass" for criterion in checks.IDENTITY_CHECKS})
+                self.assertEqual(checks.advisory(fields, "identity", date.today())["status"], expected, (key, value))
+
+    def test_identity_evidence_combines_pdf_pages_without_extracting_identity_values(self):
+        front = model_result(identity_sides=["front"])
+        back = model_result(identity_sides=["back"])
+        with patch.object(checks, "call_openai", side_effect=[front, back]):
+            result = checks.analyze_images(["recto", "verso"], "identity", "test-key", date.today())
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["identity_evidence"], [
+                {"type": "identity_card", "sides": ["front"], "confidence": "high"},
+                {"type": "identity_card", "sides": ["back"], "confidence": "high"}])
+        with patch.object(checks, "call_openai", return_value=model_result(identity_document="passport", identity_sides=["passport_biodata"])):
+            result = checks.analyze_images(["passport"], "host_identity", "test-key", date.today())
+            self.assertNotIn("recto", result["message"])
+            self.assertEqual(result["identity_evidence"][0]["type"], "passport")
+
+    def test_detail_views_keep_full_page_and_original_pixels_with_overlap(self):
+        image = Image.new("RGB", (1000, 1400), (50, 100, 150))
+        stream = io.BytesIO(); image.save(stream, format="JPEG")
+        encoded = base64.b64encode(stream.getvalue()).decode("ascii")
+        views = checks.identity_views(encoded)
+        self.assertEqual(views[0], encoded)
+        self.assertEqual(len(views), 5)
+        for detail in views[1:]:
+            with Image.open(io.BytesIO(base64.b64decode(detail))) as cropped:
+                self.assertEqual(cropped.size, (600, 840))
+                self.assertLess(abs(cropped.getpixel((100, 100))[1] - 100), 3)
+
     def test_engie_attestation_date_is_compared_as_document_date(self):
         result = model_result(document_type="address", document_date="2026-09-30",
                               date_kind="attestation", date_confidence="high")
@@ -72,7 +119,7 @@ class AdvisoryTests(unittest.TestCase):
     def test_clear_result_is_cautious_and_unknown_never_means_validated(self):
         answer = checks.advisory(model_result(), "host_identity", date.today())
         self.assertEqual(answer["status"], "success")
-        self.assertIn("Notre équipe confirmera", answer["message"])
+        self.assertNotIn("recto", answer["message"])
         self.assertIn("personne qui vous héberge", answer["message"])
         for fields in [{"readability": "uncertain"}, {"confidence": "medium"}, {"document_type": "other"}]:
             self.assertEqual(checks.advisory(model_result(**fields), "identity", date.today())["status"], "unknown")
@@ -90,8 +137,8 @@ class AdvisoryTests(unittest.TestCase):
         valid = model_result(document_type="portrait", photo_criteria=criteria, all_fields_legible=False)
         result = checks.advisory(valid, "identity_photo", date.today())
         self.assertEqual(result["status"], "success")
-        self.assertIn("moins de 6 mois", result["message"])
-        self.assertIn("confirmera", result["message"])
+        self.assertEqual(result["title"], "Photo : c’est bon !")
+        self.assertEqual(result["message"], "")
         for key in criteria:
             for value, status in [("fail", "warning"), ("uncertain", "unknown"), ("not_applicable", "unknown")]:
                 changed = dict(valid, photo_criteria={**criteria, key: value})
@@ -172,7 +219,7 @@ class AdvisoryTests(unittest.TestCase):
         response = {"status": "completed", "output": [{"type": "message", "content": [
             {"type": "output_text", "text": json.dumps(model_result())}]}]}
         with patch.object(checks, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())) as call:
-            self.assertEqual(checks.call_openai(["test-base64"], "identity", "test-key-not-real"), model_result())
+            self.assertEqual(checks.call_openai(checks.render_pages(blank_pdf()), "identity", "test-key-not-real"), model_result())
         request = call.call_args.args[0]
         self.assertEqual(request.full_url, "https://api.openai.com/v1/responses")
         payload = json.loads(request.data)
@@ -180,6 +227,7 @@ class AdvisoryTests(unittest.TestCase):
         self.assertTrue(payload["text"]["format"]["strict"])
         self.assertEqual(payload["input"][0]["content"][1]["type"], "input_image")
         self.assertEqual(payload["input"][0]["content"][1]["detail"], "high")
+        self.assertEqual(len([part for part in payload["input"][0]["content"] if part["type"] == "input_image"]), 5)
         self.assertEqual(call.call_args.kwargs["timeout"], 25)
 
     def test_provider_refusal_and_incomplete_response_are_not_successes(self):
@@ -187,7 +235,7 @@ class AdvisoryTests(unittest.TestCase):
                 {"type": "message", "content": [{"type": "refusal", "refusal": "no"}]}]}]:
             with patch.object(checks, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())):
                 with self.assertRaises(ValueError):
-                    checks.call_openai(["image"], "identity", "test-key-not-real")
+                    checks.call_openai(["image"], "proof_address", "test-key-not-real")
 
 
 class EndpointTests(unittest.TestCase):

@@ -100,7 +100,7 @@ class IdentityPhotoTests(unittest.TestCase):
         self.assertIn('aria-labelledby="analysis-modal-title"', html)
         self.assertNotIn("Avez-vous vérifié que l'attestation d'hébergement est bien signée", html)
         self.assertIn('data-check-token="', html)
-        self.assertIn('type="module" src="/static/document-checks.mjs?v=visual-2"', html)
+        self.assertIn('type="module" src="/static/document-checks.mjs?v=strict-3"', html)
 
     def test_photo_is_visible_at_top_of_admin_document_page(self):
         request_id = self.create_request()

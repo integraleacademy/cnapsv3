@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='visual-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='strict-3') }}">
   <title>Remplacement des documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -204,7 +204,7 @@
         {% endfor %}
       {% endwith %}
 
-      <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
+      <form method="post" enctype="multipart/form-data" data-identity-partial="true" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
         <p class="file-help">À la sélection, votre photo, les pièces d’identité (la vôtre et celle de votre hébergeant), le justificatif de domicile et l’attestation d’hébergement sont transmis à OpenAI pour une vérification indicative. Les alertes ne bloquent pas l’envoi ; notre équipe effectuera le contrôle final.</p>
         {% for d in invalids %}
           <section class="doc-card">
@@ -238,6 +238,6 @@
   </main>
   {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='visual-2') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='strict-3') }}"></script>
 </body>
 </html>

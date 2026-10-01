@@ -1,6 +1,8 @@
 import { analyzeDocument } from './document-analysis.mjs';
-import { fileKey, unavailableMessage, checkPresentation } from './document-check-rules.mjs';
+import { unavailableMessage, checkPresentation } from './document-check-rules.mjs';
 import { documentCheckModal } from './document-check-modal.mjs';
+import { replacementButton, attachOtherFileActions } from './document-file-actions.mjs';
+import { identityCompleteness } from './identity-completeness.mjs';
 
 function button(label, action, secondary = false) {
   const element = document.createElement('button');
@@ -30,6 +32,7 @@ function cardFor(input, file, kind) {
   critical.hidden = true;
   const actions = document.createElement('div');
   actions.className = 'document-check-actions';
+  actions.append(replacementButton(input, file));
   const reminder = document.createElement('p');
   reminder.className = 'document-check-note';
   reminder.textContent = "Vérification indicative. Notre équipe effectuera le contrôle final.";
@@ -54,23 +57,18 @@ function cardFor(input, file, kind) {
       icon.textContent = result.status === 'success' ? '✓' : result.status === 'warning' ? '!' : 'i';
       title.textContent = result.title || (result.status === 'warning' ? 'Document à vérifier' : result.status === 'success' ? 'Vérification réussie' : 'À vérifier par vos soins');
       message.textContent = result.message;
+      message.hidden = !result.message;
+      reminder.hidden = kind === 'identity_photo' && result.status === 'success';
       critical.textContent = result.critical || '';
       critical.hidden = !result.critical;
-      actions.replaceChildren();
+      actions.replaceChildren(replacementButton(input, file));
       if (['warning', 'unknown'].includes(result.status)) {
         reminder.textContent = "Vous pouvez conserver ce fichier et poursuivre. Notre équipe effectuera le contrôle final.";
-        actions.append(
-          button('Remplacer ce fichier', () => {
-            // The public form adds recto/verso files cumulatively. It uses this
-            // key to replace just this file after a new selection, not on cancel.
-            input.dataset.replaceFileKey = fileKey(file);
-            input.click();
-          }),
-          button('Conserver ce fichier', () => {
-            actions.replaceChildren();
+        const keep = button('Conserver ce fichier', () => {
+            keep.remove();
             reminder.textContent = 'Fichier conservé. Vous pouvez poursuivre ; notre équipe effectuera le contrôle final.';
-          }, true),
-        );
+          }, true);
+        actions.append(keep);
       }
     },
   };
@@ -78,6 +76,35 @@ function cardFor(input, file, kind) {
 
 export function attachDocumentChecks(root = document, analyze = analyzeDocument) {
   const modal = documentCheckModal(root);
+  attachOtherFileActions(root);
+  const identityGroups = new Map();
+  const identityState = new Map();
+  const refreshIdentity = (input, kind) => {
+    const key = `${kind}:${Array.from(root.querySelectorAll('form')).indexOf(input.form)}`;
+    let group = identityGroups.get(key);
+    if (!group) {
+      const element = document.createElement('div');
+      element.className = 'identity-completeness';
+      element.setAttribute('role', 'status');
+      element.setAttribute('aria-live', 'polite');
+      input.before(element);
+      group = { element, form: input.form, kind };
+      identityGroups.set(key, group);
+    }
+    const results = Array.from(identityState.values()).filter(state => state.input.form === group.form && state.kind === kind).flatMap(state => state.results);
+    const result = identityCompleteness(results, { partial: input.form?.dataset.identityPartial === 'true' });
+    group.element.replaceChildren();
+    group.element.hidden = !result;
+    if (!result) return;
+    group.element.className = `identity-completeness document-check document-check--${result.status}`;
+    const title = document.createElement('strong'); title.textContent = result.title;
+    const message = document.createElement('p'); message.textContent = result.message;
+    group.element.append(title, message);
+    if (result.missing && input.multiple) group.element.append(button(`Ajouter le ${result.missing}`, () => {
+      delete input.dataset.replaceFileKey;
+      input.click();
+    }));
+  };
   root.querySelectorAll('input[data-document-check]').forEach(input => {
     if (input.dataset.checkAttached) return;
     input.dataset.checkAttached = 'true';
@@ -100,10 +127,16 @@ export function attachDocumentChecks(root = document, analyze = analyzeDocument)
       const today = input.form?.dataset.checkDate;
       output.replaceChildren();
       const files = Array.from(input.files || []);
-      for (const file of files) {
+      const identity = ['identity', 'host_identity'].includes(kind);
+      const state = { input, kind, results: files.map(() => null) };
+      if (identity) { identityState.set(input, state); refreshIdentity(input, kind); }
+      const record = (index, result) => {
+        if (identity) { state.results[index] = result; refreshIdentity(input, kind); }
+      };
+      for (const [index, file] of files.entries()) {
         const card = cardFor(input, file, kind);
         output.append(card.element);
-        if (cache.has(file)) { card.result(cache.get(file)); continue; }
+        if (cache.has(file)) { card.result(cache.get(file)); record(index, cache.get(file)); continue; }
         card.pending(kind);
         const job = modal.begin(input, file, kind, signal);
         // No submit handler, required field or custom validity is added here.
@@ -112,9 +145,12 @@ export function attachDocumentChecks(root = document, analyze = analyzeDocument)
           if (current !== revision || signal.aborted) return;
           cache.set(file, result);
           card.result(result);
+          record(index, result);
         }).catch(() => {
           if (current !== revision || signal.aborted) return;
-          card.result({ status: 'unknown', message: unavailableMessage(kind) });
+          const result = { status: 'unknown', message: unavailableMessage(kind) };
+          card.result(result);
+          record(index, result);
         }).finally(job.finish);
       }
     });

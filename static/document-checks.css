@@ -70,3 +70,8 @@ button.analysis-modal-continue:focus-visible, button.analysis-modal-close:focus-
 @media (max-width: 640px) { .document-check { padding: 16px; } button.document-check-button { width: 100%; } .analysis-modal-content { padding: 26px 23px 20px; } }
 @media (max-height: 700px) { .analysis-visual { height: 90px; margin-top: 12px; margin-bottom: 12px; transform: scale(.8); } .analysis-steps { margin-top: 14px; margin-bottom: 14px; } }
 @media (prefers-reduced-motion: reduce) { .document-check--pending .document-check-icon, .analysis-scan, .analysis-progress span { animation: none; } }
+
+.document-file-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; padding: 12px; border: 1px solid #dce4f5; border-radius: 12px; background: #f8faff; font-size: .85rem; overflow-wrap: anywhere; }
+.identity-completeness { margin-top: 12px; }
+.identity-completeness > strong { font-size: .95rem; }
+@media (max-width: 640px) { .document-file-row { flex-direction: column; align-items: stretch; } }

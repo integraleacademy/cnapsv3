@@ -42,6 +42,11 @@ _cache_lock = threading.Lock()
 _cache = OrderedDict()
 
 PROBLEMS = ["blur", "glare", "cropped", "small_text", "low_contrast", "unreadable_fields"]
+IDENTITY_CHECKS = ["sharp_text", "all_fields_readable", "whole_document_visible", "no_glare", "no_obstruction"]
+ADDRESS_KINDS = ["water", "rent_receipt", "gas", "electricity", "gas_electricity", "energy_attestation",
+                 "landline", "mobile", "internet", "mixed_telecom", "other", "uncertain"]
+ACCEPTED_ADDRESS_KINDS = set(ADDRESS_KINDS[:7])
+CHECK_VALUES = ["pass", "fail", "uncertain", "not_applicable"]
 PHOTO_CRITERIA = {
     "single_portrait": "une seule personne, sur une véritable photo de portrait",
     "sharp_and_well_lit": "une photo nette, bien éclairée, sans ombre ni reflet gênant",
@@ -69,6 +74,14 @@ SCHEMA = {
         "photo_criteria": PHOTO_SCHEMA,
         "signature": {"type": "string", "enum": ["present", "absent", "uncertain", "not_applicable"]},
         "signature_confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "address_kind": {"type": "string", "enum": ADDRESS_KINDS},
+        "address_kind_confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "identity_document": {"type": "string", "enum": ["identity_card", "residence_permit", "passport", "uncertain", "not_applicable"]},
+        "identity_sides": {"type": "array", "items": {"type": "string", "enum": ["front", "back", "passport_biodata"]}},
+        "side_confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "identity_checks": {"type": "object", "additionalProperties": False,
+                            "properties": {key: {"type": "string", "enum": CHECK_VALUES} for key in IDENTITY_CHECKS},
+                            "required": IDENTITY_CHECKS},
     },
 }
 SCHEMA["required"] = list(SCHEMA["properties"])
@@ -80,7 +93,17 @@ N'extrais aucun nom, adresse, numéro personnel, numéro de document ou autre do
 Renvoie uniquement les champs du schéma demandé. Toutes les pages visibles doivent être examinées.
 
 JUSTIFICATIF DE DOMICILE : identifie la date du document (YYYY-MM-DD), sans calculer son ancienneté.
-Accepte les factures, quittances et attestations de fournisseur d'énergie, notamment ENGIE.
+Identifie précisément le SERVICE facturé dans address_kind, sans te fier au logo du fournisseur.
+Types : facture d'eau water, quittance de loyer rent_receipt, gaz gas, électricité electricity,
+gaz et électricité gas_electricity, attestation de fournisseur d'énergie energy_attestation,
+téléphone FIXE SEUL landline, téléphone MOBILE mobile, Internet/ADSL/fibre/box internet,
+offre groupée Internet + téléphone (même fixe) ou mobile mixed_telecom. Mobile et Internet sont
+REFUSÉS dans ce formulaire, mais restent de document_type address : le serveur applique le refus. Une facture Orange, SFR, Free ou Bouygues n'est pas automatiquement
+du fixe : il faut un service de téléphonie fixe seul explicitement identifiable. Un simple numéro
+de téléphone fixe sur le document ne prouve pas que la facture concerne un abonnement fixe.
+Un avis d'échéance de loyer n'est pas une quittance acquittée : other. Autre document : other.
+Si le type de service est incertain : uncertain, address_kind_confidence low. Hors domicile :
+address_kind uncertain et address_kind_confidence low. Les attestations d'énergie ENGIE sont admises.
 Une attestation de titulaire de contrat « atteste qu'en date du X et depuis le Y » est datée de X.
 Y est le début du contrat, pas la date de l'attestation. La formulation « en date du » compte.
 Ne prends jamais la date de début de contrat, de naissance, de consommation, d'échéance ou de paiement.
@@ -99,6 +122,26 @@ indique le problème. all_fields_legible ne peut être true que si toutes les in
 sur chaque face fournie sont directement lisibles sans deviner, y compris les petits caractères.
 Une face recto ou verso seule peut être lisible : ne suppose pas qu'une face absente est floue.
 Dans le doute, utilise uncertain / medium ou low, jamais clear / high par défaut.
+Tu reçois UNE PAGE ENTIÈRE puis quatre VUES DE DÉTAIL de cette même page. Ces détails ne sont
+PAS des pages ou faces supplémentaires. Examine les détails pour juger les contours des petits
+caractères et les reflets, mais utilise uniquement la vue entière pour les bords et les faces.
+Pour chaque identity_checks : sharp_text = pass uniquement si les caractères ont des contours
+francs, fail même pour un léger flou ; all_fields_readable = pass uniquement si CHAQUE champ
+présent est directement lisible, y compris les petits caractères et la zone machine ;
+whole_document_visible = pass uniquement si aucun bord/coin ni aucune zone utile du document
+n'est coupé ; no_glare = fail dès qu'un reflet lumineux/zone surexposée est visible sur la pièce,
+même si tu parviens à deviner le texte ; no_obstruction = fail si doigt, objet ou ombre masque
+une information. Une zone douteuse => uncertain, jamais pass. Ne compense jamais un champ
+flou ou reflété par une zone MRZ ou un autre texte plus net. Un scan lisible au premier regard
+peut rester légèrement flou : contrôle les petits caractères avant de décider.
+Identifie identity_document et les faces réellement visibles : carte d'identité identity_card,
+titre de séjour residence_permit, passeport passport. Pour une carte/titre : front et/ou back.
+Deux copies du recto ne sont PAS un recto et un verso. Pour un passeport : passport_biodata
+uniquement si la page avec la photo et les informations d'identité est visible, pas la couverture.
+Une page peut contenir les deux faces d'une même carte : indique alors front ET back.
+Ne déduis jamais une face absente. En cas de doute : side_confidence low et identity_sides vide.
+N'identifie pas la personne et ne compare pas les visages. Hors pièce d'identité :
+identity_document not_applicable, identity_sides vide, side_confidence low, tous identity_checks not_applicable.
 
 PHOTO D'IDENTITÉ : ne reconnais pas la personne et ne déduis aucun attribut personnel.
 Pour une photo de portrait, document_type portrait. Évalue chacun des critères photo_criteria
@@ -162,6 +205,13 @@ def check_schema(result):
     if not isinstance(criteria, dict) or set(criteria) != set(PHOTO_CRITERIA) or any(
             value not in {"pass", "fail", "uncertain", "not_applicable"} for value in criteria.values()):
         raise ValueError("invalid_result")
+    quality = result["identity_checks"]
+    if not isinstance(quality, dict) or set(quality) != set(IDENTITY_CHECKS) or any(
+            value not in CHECK_VALUES for value in quality.values()):
+        raise ValueError("invalid_result")
+    if not isinstance(result["identity_sides"], list) or len(result["identity_sides"]) > 3 or any(
+            value not in {"front", "back", "passport_biodata"} for value in result["identity_sides"]):
+        raise ValueError("invalid_result")
     return result
 
 
@@ -184,9 +234,7 @@ def advisory(result, kind, today):
                     "critical": "Une photo non conforme entraînera le rejet de votre dossier lors du contrôle de conformité."}
         if result["confidence"] != "high" or any(value != "pass" for value in result["photo_criteria"].values()):
             return unavailable(kind)
-        return {"status": "success", "title": "Critères visuels de la photo vérifiés", "message":
-                "Votre photo semble respecter les critères visuels : netteté, visage de face et dégagé, expression neutre et fond adapté. "
-                "Vérifiez aussi qu’elle date de moins de 6 mois et provient d’un photographe ou d’une cabine agréée. Notre équipe confirmera sa conformité."}
+        return {"status": "success", "title": "Photo : c’est bon !", "message": ""}
     if kind == "hosting_certificate":
         if result["signature"] == "absent" and result["signature_confidence"] == "high" and result["confidence"] == "high":
             return {"status": "warning", "title": "Signature non repérée", "message":
@@ -198,6 +246,14 @@ def advisory(result, kind, today):
                 "Une signature a été repérée visuellement. Assurez-vous qu’il s’agit bien de celle de la personne qui vous héberge. "
                 "Ce contrôle ne certifie pas son authenticité ; notre équipe vérifiera l’attestation."}
     if kind == "proof_address":
+        if result["address_kind_confidence"] != "high" or result["address_kind"] == "uncertain":
+            return {"status": "unknown", "title": "Type de justificatif à vérifier", "message":
+                    "Je n’ai pas pu déterminer le type de justificatif. Fournissez une facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou une quittance de loyer de moins de 3 mois. Les factures de mobile et d’Internet ne sont pas acceptées."}
+        if result["address_kind"] not in ACCEPTED_ADDRESS_KINDS:
+            reason = "Les factures de téléphone mobile et d’Internet, y compris les offres box avec téléphone fixe, ne sont pas acceptées." if result["address_kind"] in {"mobile", "internet", "mixed_telecom"} else "Ce type de document n’est pas accepté comme justificatif dans ce formulaire."
+            return {"status": "warning", "title": "Justificatif non accepté", "message": reason +
+                    " Remplacez-le par une facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou une quittance de loyer de moins de 3 mois.",
+                    "critical": "Ce justificatif sera refusé lors du contrôle du dossier."}
         if result["confidence"] != "high" or result["date_confidence"] != "high" or result["date_kind"] == "uncertain":
             return unavailable(kind)
         try:
@@ -215,16 +271,15 @@ def advisory(result, kind, today):
                 f"Bonne nouvelle ! La date repérée sur votre document est le {formatted} : il date de moins de 3 mois. "
                 "Vous pouvez conserver ce fichier. Notre équipe confirmera sa conformité lors du contrôle du dossier."}
     subject = "La pièce d’identité de la personne qui vous héberge" if kind == "host_identity" else "Votre pièce d’identité"
-    if result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"]:
+    if result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"] or "fail" in result["identity_checks"].values():
         return {"status": "warning", "title": "Attention : pièce d’identité à remplacer", "message":
                 f"{subject} semble floue ou certaines informations ne sont pas suffisamment lisibles. "
                 "Déposez de préférence une photo ou un scan plus net : toutes les informations, y compris les petits caractères, doivent être lisibles, sans reflet et sans bord coupé.",
                 "critical": "Si la pièce d’identité n’est pas parfaitement lisible, elle sera rejetée et votre dossier ne pourra pas être transmis au CNAPS avant son remplacement."}
-    if result["readability"] != "clear" or result["confidence"] != "high":
+    if result["readability"] != "clear" or result["confidence"] != "high" or any(value != "pass" for value in result["identity_checks"].values()):
         return unavailable(kind)
-    return {"status": "success", "title": "Lisibilité vérifiée", "message":
-            f"{subject} semble bien lisible : aucun problème évident n’a été repéré sur le fichier fourni. "
-            "Pensez à joindre le recto et le verso. Notre équipe confirmera la conformité du document."}
+    return {"status": "success", "title": "Fichier lisible", "message":
+            f"{subject} semble nette, entièrement visible et sans reflet gênant sur les pages fournies."}
 
 
 def render_photo(data):
@@ -268,7 +323,24 @@ def render_pages(data):
     return images
 
 
+def identity_views(encoded):
+    """Keep full-page context plus native-resolution details; never sharpen or invent pixels."""
+    views = [encoded]
+    with Image.open(BytesIO(base64.b64decode(encoded))) as picture:
+        width, height = picture.size
+        for left, top, right, bottom in [(0, 0, .6, .6), (.4, 0, 1, .6), (0, .4, .6, 1), (.4, .4, 1, 1)]:
+            with picture.crop((int(left * width), int(top * height), int(right * width), int(bottom * height))) as detail:
+                stream = BytesIO()
+                detail.save(stream, format="JPEG", quality=95)
+                views.append(base64.b64encode(stream.getvalue()).decode("ascii"))
+    return views
+
+
 def call_openai(images, kind, api_key, timeout=25):
+    if kind in {"identity", "host_identity"}:
+        if len(images) != 1:
+            raise ValueError("identity_requires_one_page")
+        images = identity_views(images[0])
     payload = {
         "model": os.getenv("OPENAI_DOCUMENT_MODEL", "gpt-4.1").strip() or "gpt-4.1",
         "store": False,
@@ -278,7 +350,7 @@ def call_openai(images, kind, api_key, timeout=25):
             *[{"type": "input_image", "image_url": "data:image/jpeg;base64," + image, "detail": "high"} for image in images],
         ]}],
         "text": {"format": {"type": "json_schema", "name": "document_visual_check", "strict": True, "schema": SCHEMA}},
-        "max_output_tokens": 1000,
+        "max_output_tokens": 1600,
     }
     req = Request("https://api.openai.com/v1/responses", data=json.dumps(payload).encode("utf-8"),
                   headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}, method="POST")
@@ -305,17 +377,21 @@ def analyze_images(images, kind, api_key, today):
     # blurred characters on another page (especially duplicated recto/verso scans).
     deadline = time.monotonic() + 25
     answers = []
+    evidence = []
     for image in images:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return unavailable(kind)
-        answer = advisory(call_openai([image], kind, api_key, timeout=remaining), kind, today)
+        inspected = check_schema(call_openai([image], kind, api_key, timeout=remaining))
+        if inspected["document_type"] == "identity":
+            evidence.append({"type": inspected["identity_document"], "sides": inspected["identity_sides"], "confidence": inspected["side_confidence"]})
+        answer = advisory(inspected, kind, today)
         if answer["status"] == "warning":
             return answer
         answers.append(answer)
     if not answers or any(answer["status"] != "success" for answer in answers):
         return unavailable(kind)
-    return answers[0]
+    return {**answers[0], "identity_evidence": evidence}
 
 
 def reserve_usage(db_path, token, now, units=1):

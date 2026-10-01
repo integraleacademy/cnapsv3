@@ -1943,12 +1943,12 @@ DOC_LABELS = {
 }
 
 CHECKLIST_LABELS = [
-    "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
+    "J'ai fourni le RECTO et le VERSO de ma carte d'identité ou de mon titre de séjour, ou la page d'identité avec photo de mon passeport.",
     "J'ai fourni une photo d'identité officielle respectant tous les critères indiqués. J'ai compris que mon dossier sera rejeté si ma photo n'est pas conforme.",
     "J'ai vérifié la lisibilité de mes documents et pris connaissance des alertes éventuelles.",
     "J'ai vérifié la date de mon justificatif de domicile et pris connaissance du critère de moins de 3 mois.",
-    "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
-    "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
+    "Mon justificatif de domicile n'est ni une facture de téléphone mobile ni une facture Internet. Une facture de téléphone fixe seul est acceptée.",
+    "Si je suis hébergé, j'ai fourni le recto et le verso de la carte d'identité ou du titre de séjour de mon hébergeant, ou la page d'identité avec photo de son passeport.",
     "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée.",
 ]
 
