@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
   <title>Remplacement des documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -195,15 +196,24 @@
     </header>
 
     <section class="content">
-      <p class="info">Les éléments ci-dessous nécessitent un nouveau fichier. Format accepté : PDF uniquement.</p>
+      <p class="info">Les éléments ci-dessous nécessitent un nouveau fichier. Photo d'identité : JPEG ou PNG. Autres documents : PDF. 5 Mo maximum par fichier.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="photo-warning" role="alert">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
 
       <form method="post" enctype="multipart/form-data">
         {% for d in invalids %}
           <section class="doc-card">
             <div class="doc-title">{{ labels.get(d.doc_type, d.doc_type) }}</div>
             <div class="reason">⚠️ Raison : {{ d.non_conformite_reason or 'Non précisée' }}</div>
-            <p class="file-help">Choisissez une version nette et complète du document.</p>
-            <input type="file" name="replace_{{ d.id }}" accept="application/pdf,.pdf" required>
+            {% if d.doc_type == 'identity_photo' %}
+              {% include '_identity_photo_guidance.html' %}
+            {% else %}
+              <p class="file-help">Choisissez une version nette et complète du document au format PDF.</p>
+            {% endif %}
+            <input type="file" name="replace_{{ d.id }}" aria-label="{{ labels.get(d.doc_type, d.doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if d.doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if d.doc_type == 'identity_photo' %}data-identity-photo{% endif %} required>
           </section>
         {% endfor %}
 
@@ -211,8 +221,12 @@
           <section class="doc-card">
             <div class="doc-title">{{ labels.get(doc_type, doc_type) }}</div>
             <div class="reason">⚠️ Document manquant</div>
-            <p class="file-help">Ajoutez le document demandé au format PDF.</p>
-            <input type="file" name="missing_{{ doc_type }}" accept="application/pdf,.pdf" required>
+            {% if doc_type == 'identity_photo' %}
+              {% include '_identity_photo_guidance.html' %}
+            {% else %}
+              <p class="file-help">Ajoutez le document demandé au format PDF.</p>
+            {% endif %}
+            <input type="file" name="missing_{{ doc_type }}" aria-label="{{ labels.get(doc_type, doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if doc_type == 'identity_photo' %}data-identity-photo{% endif %} required>
           </section>
         {% endfor %}
 
@@ -220,5 +234,6 @@
       </form>
     </section>
   </main>
+  <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
 </body>
 </html>

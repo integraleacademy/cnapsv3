@@ -21,6 +21,8 @@ import json
 import re
 import hmac
 import logging
+import warnings
+from PIL import Image, UnidentifiedImageError
 
 
 
@@ -82,9 +84,9 @@ DEFAULT_FORMATION_SESSIONS = {
     ],
 }
 
-DB_NAME = "/mnt/data/cnaps.db"
+DB_NAME = os.getenv("CNAPS_DB_PATH", "/mnt/data/cnaps.db")
 DEBUG_SUMMARY = os.getenv("DEBUG_SUMMARY", "0").strip() == "1"
-UPLOAD_DIR = "/mnt/data/uploads"
+UPLOAD_DIR = os.getenv("CNAPS_UPLOAD_DIR", "/mnt/data/uploads")
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
 
@@ -1929,6 +1931,7 @@ def lookup_cnaps():
 
 DOC_LABELS = {
     "identity": "Pièce d'identité (recto/verso) ou passeport",
+    "identity_photo": "Photo d'identité officielle",
     "proof_address": "Justificatif de domicile de moins de 3 mois",
     "host_identity": "Pièce d'identité de l'hébergeant",
     "hosting_certificate": "Attestation d'hébergement signée",
@@ -1938,6 +1941,7 @@ DOC_LABELS = {
 
 CHECKLIST_LABELS = [
     "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
+    "J'ai fourni une photo d'identité officielle respectant tous les critères indiqués. J'ai compris que mon dossier sera rejeté si ma photo n'est pas conforme.",
     "Les documents que j'ai fourni sont bien LISIBLES et ne sont pas flous.",
     "Mon justificatif de domicile a bien MOINS DE 3 MOIS.",
     "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
@@ -2179,7 +2183,7 @@ def _dracar_password(lastname: str, birth_date: str):
 
 
 def _required_doc_types(heberge: int, non_francais: int):
-    required = ["identity", "proof_address"]
+    required = ["identity", "identity_photo", "proof_address"]
     if heberge:
         required.extend(["host_identity", "hosting_certificate"])
     if non_francais:
@@ -2324,6 +2328,47 @@ def _file_size_bytes(file_storage):
     return size
 
 
+def _document_upload_error(file_storage, doc_type):
+    """Validate every upload path; visual photo compliance remains an admin decision."""
+    filename = file_storage.filename or ""
+    extension = os.path.splitext(filename)[1].lower()
+    if doc_type == "identity_photo":
+        if extension not in {".jpg", ".jpeg", ".png"}:
+            return "La photo d'identité doit être au format JPEG ou PNG (pas de PDF, HEIC ni capture d'écran)."
+    elif extension != ".pdf":
+        return f"Le document {filename} doit être au format PDF."
+
+    size = _file_size_bytes(file_storage)
+    if size > MAX_DOCUMENT_SIZE_BYTES:
+        return f"Le document {filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo."
+    if size == 0:
+        return f"Le fichier {filename} est vide. Sélectionnez un fichier valide."
+
+    if doc_type == "identity_photo":
+        stream = file_storage.stream
+        current_pos = stream.tell()
+        try:
+            stream.seek(0)
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(stream) as photo:
+                    expected_format = "PNG" if extension == ".png" else "JPEG"
+                    if photo.format != expected_format:
+                        return "Le contenu de la photo ne correspond pas à son format JPEG ou PNG. Exportez une nouvelle image."
+                    if getattr(photo, "is_animated", False):
+                        return "La photo d'identité doit être une image fixe, sans animation."
+                    photo.verify()
+                stream.seek(0)
+                with Image.open(stream) as photo:
+                    photo.load()
+        except (UnidentifiedImageError, OSError, ValueError, SyntaxError,
+                Image.DecompressionBombError, Image.DecompressionBombWarning):
+            return "La photo d'identité est illisible ou invalide. Déposez une image JPEG ou PNG nette, de 5 Mo maximum."
+        finally:
+            stream.seek(current_pos)
+    return None
+
+
 def _find_recent_duplicate_request(conn, nom, prenom, email, date_naissance, telephone):
     """Retourne une demande publique existante qui semble être un doublon utilisateur."""
     conn.row_factory = sqlite3.Row
@@ -2356,10 +2401,10 @@ def _find_recent_duplicate_request(conn, nom, prenom, email, date_naissance, tel
 def public_form():
     def _render_with_error(message: str):
         flash(message, "public_error")
-        return render_template("public_form.html", form_data=request.form)
+        return render_template("public_form.html", form_data=request.form, checklist_labels=CHECKLIST_LABELS)
 
     if request.method == "GET":
-        return render_template("public_form.html")
+        return render_template("public_form.html", checklist_labels=CHECKLIST_LABELS)
 
     nom = (request.form.get("nom") or "").strip()
     prenom = (request.form.get("prenom") or "").strip()
@@ -2395,12 +2440,12 @@ def public_form():
         cleaned = [f for f in files if f and f.filename]
         if not cleaned:
             return _render_with_error(f"Document manquant : {DOC_LABELS[doc_type]}")
+        if doc_type == "identity_photo" and len(cleaned) != 1:
+            return _render_with_error("Veuillez déposer une seule photo d'identité officielle.")
         for f in cleaned:
-            filename = (f.filename or "").lower()
-            if not filename.endswith(".pdf"):
-                return _render_with_error(f"Le document {f.filename} doit être au format PDF.")
-            if _file_size_bytes(f) > MAX_DOCUMENT_SIZE_BYTES:
-                return _render_with_error(f"Le document {f.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.")
+            error = _document_upload_error(f, doc_type)
+            if error:
+                return _render_with_error(error)
         uploaded[doc_type] = cleaned
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -2864,16 +2909,16 @@ def add_request_document(request_id):
         return redirect(url_for("request_documents", request_id=request_id))
 
     if not incoming_documents:
-        flash("Veuillez sélectionner au moins un fichier PDF à ajouter.", "error")
+        flash("Veuillez sélectionner un fichier à ajouter (JPEG/PNG pour la photo, PDF pour les autres pièces).", "error")
         return redirect(url_for("request_documents", request_id=request_id))
 
+    if doc_type == "identity_photo" and len(incoming_documents) != 1:
+        flash("Veuillez déposer une seule photo d'identité à la fois.", "error")
+        return redirect(url_for("request_documents", request_id=request_id))
     for incoming in incoming_documents:
-        if not incoming.filename.lower().endswith(".pdf"):
-            flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
-            return redirect(url_for("request_documents", request_id=request_id))
-
-        if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-            flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+        error = _document_upload_error(incoming, doc_type)
+        if error:
+            flash(error, "error")
             return redirect(url_for("request_documents", request_id=request_id))
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -2923,15 +2968,7 @@ def replace_request_document(request_id, document_id):
     incoming = request.files.get("document")
 
     if not incoming or not incoming.filename:
-        flash("Veuillez sélectionner un fichier PDF de remplacement.", "error")
-        return redirect(url_for("request_documents", request_id=request_id))
-
-    if not incoming.filename.lower().endswith(".pdf"):
-        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
-        return redirect(url_for("request_documents", request_id=request_id))
-
-    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "error")
+        flash("Veuillez sélectionner un fichier de remplacement.", "error")
         return redirect(url_for("request_documents", request_id=request_id))
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -2948,6 +2985,11 @@ def replace_request_document(request_id, document_id):
 
         if not doc:
             flash("Ce document n'existe plus ou a déjà été remplacé.", "warning")
+            return redirect(url_for("request_documents", request_id=request_id))
+
+        error = _document_upload_error(incoming, doc["doc_type"])
+        if error:
+            flash(error, "error")
             return redirect(url_for("request_documents", request_id=request_id))
 
         original, stored, rel_path = _secure_store(incoming, str(request_id))
@@ -3203,16 +3245,21 @@ def replace_documents(request_id):
             if not invalids and not missing_doc_types:
                 return render_template("replace_documents_already_sent.html")
 
+            # Validate the whole batch before replacing any existing document.
+            upload_fields = [(f"replace_{doc['id']}", doc["doc_type"]) for doc in invalids]
+            upload_fields.extend((f"missing_{doc_type}", doc_type) for doc_type in missing_doc_types)
+            for field_name, doc_type in upload_fields:
+                incoming = request.files.get(field_name)
+                if incoming and incoming.filename:
+                    error = _document_upload_error(incoming, doc_type)
+                    if error:
+                        flash(error, "public_error")
+                        return redirect(url_for("replace_documents", request_id=request_id))
+
             replaced = 0
             for doc in invalids:
                 incoming = request.files.get(f"replace_{doc['id']}")
                 if incoming and incoming.filename:
-                    if not incoming.filename.lower().endswith(".pdf"):
-                        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
-                        return redirect(url_for("replace_documents", request_id=request_id))
-                    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
-                        return redirect(url_for("replace_documents", request_id=request_id))
                     conn.execute("UPDATE request_documents SET is_active = 0 WHERE id = ?", (doc["id"],))
                     original, stored, rel_path = _secure_store(incoming, str(request_id))
                     conn.execute(
@@ -3228,13 +3275,6 @@ def replace_documents(request_id):
             for doc_type in missing_doc_types:
                 incoming = request.files.get(f"missing_{doc_type}")
                 if incoming and incoming.filename:
-                    if not incoming.filename.lower().endswith(".pdf"):
-                        flash(f"Le document {incoming.filename} doit être au format PDF.", "error")
-                        return redirect(url_for("replace_documents", request_id=request_id))
-                    if _file_size_bytes(incoming) > MAX_DOCUMENT_SIZE_BYTES:
-                        flash(f"Le document {incoming.filename} dépasse 5 Mo. Taille maximale autorisée : 5 Mo.", "public_error")
-                        return redirect(url_for("replace_documents", request_id=request_id))
-
                     original, stored, rel_path = _secure_store(incoming, str(request_id))
                     conn.execute(
                         """
@@ -3285,6 +3325,13 @@ def download_full_bundle(request_id):
 
         if not docs or any(d["is_conforme"] != 1 for d in docs):
             return "Tous les documents doivent être conformes avant téléchargement.", 400
+
+        try:
+            missing_doc_types = json.loads(req["missing_doc_types"] or "[]")
+        except json.JSONDecodeError:
+            missing_doc_types = []
+        if missing_doc_types:
+            return "Les documents signalés manquants doivent être fournis et validés avant téléchargement.", 400
 
         oversized_docs = []
         for d in docs:

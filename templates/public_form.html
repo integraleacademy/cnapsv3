@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -230,6 +231,13 @@
       <div class="section">
         <div class="section-badge">📄 Étape 2</div>
         <h2>Documents à déposer</h2>
+        <section class="identity-photo-card" aria-labelledby="photo-title">
+          <h3 class="photo-heading" id="photo-title">📷 Photo d'identité officielle <span class="photo-required">Obligatoire</span></h3>
+          <p class="photo-subtitle">Photo de face de votre visage sur fond neutre — JPEG ou PNG.</p>
+          {% include '_identity_photo_guidance.html' %}
+          <label for="identity_photo">Déposer ma photo d'identité</label>
+          <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-identity-photo required>
+        </section>
         <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
         <input type="file" name="identity" accept="application/pdf,.pdf" multiple required>
         <div class="upload-status" data-upload-status="identity"></div>
@@ -264,14 +272,7 @@
       <div class="section checks">
         <div class="section-badge">✅ Étape 4</div>
         <h2>Contrôle de conformité</h2>
-        {% for item in [
-          "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
-          "Les documents que j'ai fourni sont bien LISIBLES et ne sont pas flous.",
-          "Mon justificatif de domicile a bien MOINS DE 3 MOIS.",
-          "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
-          "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
-          "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée."
-        ] %}
+        {% for item in checklist_labels %}
         <label><input type="checkbox" name="{{ item }}" style="width:auto" required {% if fd.get(item) == 'on' %}checked{% endif %}> {{ item }}</label>
         {% endfor %}
       </div>
@@ -285,7 +286,7 @@
 
   <div id="file-alert-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="file-alert-title" aria-describedby="file-alert-message">
     <div class="modal">
-      <h3 id="file-alert-title">Document trop volumineux</h3>
+      <h3 id="file-alert-title">Fichier non accepté</h3>
       <p id="file-alert-message"></p>
       <div class="modal-footer">
         <button type="button" id="file-alert-close" class="modal-btn">OK</button>
@@ -370,7 +371,7 @@
       status.innerHTML = `${label}<ul>${files.map(file => `<li>${file.name}</li>`).join('')}</ul>`;
     }
 
-    document.querySelectorAll('input[type="file"]').forEach(function(input) {
+    document.querySelectorAll('input[type="file"]:not([data-identity-photo])').forEach(function(input) {
       input.addEventListener('change', function() {
         let files = Array.from(input.files || []);
         const tooLargeFiles = files.filter(file => file.size > 5 * 1024 * 1024);
@@ -400,5 +401,6 @@
     }
     heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
   </script>
+  <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
 </body>
 </html>
