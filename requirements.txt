@@ -3,3 +3,4 @@ python-docx
 gunicorn
 pandas
 weasyprint
+Pillow

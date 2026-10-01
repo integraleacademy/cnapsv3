@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gérer les documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
   <style>
     :root {
       --bg: #f3f4f6;
@@ -479,18 +480,18 @@
       <form class="add-document-form" method="post" action="/a-traiter/{{ req.id }}/documents/add" enctype="multipart/form-data">
         <label class="field">
           Type de document
-          <select name="doc_type" required>
+          <select name="doc_type" id="manual-doc-type" required>
             {% for doc_type, label in doc_labels.items() %}
               <option value="{{ doc_type }}">{{ label }}</option>
             {% endfor %}
           </select>
         </label>
         <label class="field">
-          Fichier(s) PDF
-          <input type="file" name="documents" accept="application/pdf,.pdf" multiple required>
+          <span id="manual-file-label">Fichier(s) PDF</span>
+          <input type="file" id="manual-doc-files" name="documents" accept="application/pdf,.pdf" multiple required>
         </label>
         <button class="btn-primary" type="submit">Importer dans le dossier</button>
-        <p class="help">PDF uniquement, 5 Mo maximum par fichier. Les documents importés apparaissent immédiatement dans la liste ci-dessous avec le statut « En attente de traitement ».</p>
+        <p class="help">Photo d'identité : JPEG ou PNG. Autres pièces : PDF. 5 Mo maximum par fichier. Les documents importés apparaissent immédiatement dans la liste ci-dessous avec le statut « En attente de traitement ».</p>
       </form>
     </div>
 
@@ -517,9 +518,17 @@
 
       {% for doc_type, docs in grouped.items() %}
         <h2 class="group-title">{{ doc_labels.get(doc_type, doc_type) }}</h2>
+        {% if doc_type == 'identity_photo' %}
+          {% include '_identity_photo_guidance.html' %}
+        {% endif %}
         {% for d in docs %}
           <div class="doc">
             <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
+            {% if doc_type == 'identity_photo' %}
+              <a href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener" aria-label="Ouvrir la photo d'identité en taille réelle">
+                <img class="photo-preview" src="/uploads/{{ req.id }}/{{ d.stored_name }}" alt="Photo d'identité à contrôler" loading="lazy">
+              </a>
+            {% endif %}
 
             <div class="status-row">
               <label>
@@ -546,7 +555,7 @@
               <div class="replace-document-controls">
                 <label class="replacement-field">
                   Remplacer ce document
-                  <input type="file" name="document" form="replace-document-{{ d.id }}" accept="application/pdf,.pdf" required>
+                  <input type="file" name="document" form="replace-document-{{ d.id }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if doc_type == 'identity_photo' %}data-identity-photo{% endif %} required>
                 </label>
                 <button class="btn-replace" type="submit" form="replace-document-{{ d.id }}">Importer le remplacement</button>
               </div>
@@ -584,6 +593,18 @@
   </div>
 
   <script>
+    const manualDocType = document.getElementById('manual-doc-type');
+    const manualDocFiles = document.getElementById('manual-doc-files');
+    const syncManualFileType = () => {
+      const isPhoto = manualDocType.value === 'identity_photo';
+      manualDocFiles.value = '';
+      manualDocFiles.accept = isPhoto ? 'image/jpeg,image/png,.jpg,.jpeg,.png' : 'application/pdf,.pdf';
+      manualDocFiles.multiple = !isPhoto;
+      document.getElementById('manual-file-label').textContent = isPhoto ? "Photo d'identité JPEG ou PNG" : 'Fichier(s) PDF';
+    };
+    manualDocType.addEventListener('change', syncManualFileType);
+    syncManualFileType();
+
     const reviewForm = document.getElementById('review-form');
     const autosaveStatus = document.getElementById('autosave-status');
     const reasonInputs = reviewForm.querySelectorAll('.reason');
@@ -634,5 +655,6 @@
       input.addEventListener('blur', autosave);
     });
   </script>
+  <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
 </body>
 </html>
