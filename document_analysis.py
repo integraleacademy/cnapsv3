@@ -20,13 +20,21 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 import pypdfium2 as pdfium
+from PIL import Image, ImageOps
 from flask import jsonify, request, session
 from werkzeug.exceptions import RequestEntityTooLarge
 
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PAGES = 4
-KINDS = {"identity", "host_identity", "proof_address"}
+KIND_LABELS = {
+    "identity": "pièce d'identité du candidat",
+    "host_identity": "pièce d'identité de la personne qui héberge le candidat",
+    "proof_address": "justificatif de domicile",
+    "identity_photo": "photo d'identité officielle du candidat",
+    "hosting_certificate": "attestation d'hébergement : présence de la signature de l'hébergeant",
+}
+KINDS = set(KIND_LABELS)
 FRANCE_TZ = ZoneInfo("Europe/Paris")
 _pdf_lock = threading.Lock()  # PDFium must not run concurrently across threads.
 _slots = threading.BoundedSemaphore(2)
@@ -34,10 +42,23 @@ _cache_lock = threading.Lock()
 _cache = OrderedDict()
 
 PROBLEMS = ["blur", "glare", "cropped", "small_text", "low_contrast", "unreadable_fields"]
+PHOTO_CRITERIA = {
+    "single_portrait": "une seule personne, sur une véritable photo de portrait",
+    "sharp_and_well_lit": "une photo nette, bien éclairée, sans ombre ni reflet gênant",
+    "front_facing_and_centered": "la tête droite, de face et bien cadrée",
+    "neutral_expression": "une expression neutre et la bouche fermée",
+    "eyes_visible": "les yeux ouverts et visibles, sans reflet ni verres teintés",
+    "head_and_face_clear": "la tête nue et le visage dégagé",
+    "plain_light_background": "un fond uni, clair et neutre (gris ou bleu clair, pas blanc)",
+    "no_visible_filter_or_capture": "aucun filtre visible, aucune capture d’écran ni photographie d’une pièce d’identité",
+}
+PHOTO_SCHEMA = {"type": "object", "additionalProperties": False,
+                "properties": {key: {"type": "string", "enum": ["pass", "fail", "uncertain", "not_applicable"]}
+                               for key in PHOTO_CRITERIA}, "required": list(PHOTO_CRITERIA)}
 SCHEMA = {
     "type": "object", "additionalProperties": False,
     "properties": {
-        "document_type": {"type": "string", "enum": ["identity", "address", "other", "uncertain"]},
+        "document_type": {"type": "string", "enum": ["identity", "address", "portrait", "hosting_certificate", "other", "uncertain"]},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "document_date": {"type": ["string", "null"]},
         "date_kind": {"type": "string", "enum": ["issue", "attestation", "invoice", "rent_receipt", "uncertain"]},
@@ -45,6 +66,9 @@ SCHEMA = {
         "readability": {"type": "string", "enum": ["clear", "slightly_blurred", "poor", "uncertain"]},
         "all_fields_legible": {"type": "boolean"},
         "problems": {"type": "array", "items": {"type": "string", "enum": PROBLEMS}},
+        "photo_criteria": PHOTO_SCHEMA,
+        "signature": {"type": "string", "enum": ["present", "absent", "uncertain", "not_applicable"]},
+        "signature_confidence": {"type": "string", "enum": ["high", "medium", "low"]},
     },
 }
 SCHEMA["required"] = list(SCHEMA["properties"])
@@ -75,12 +99,40 @@ indique le problème. all_fields_legible ne peut être true que si toutes les in
 sur chaque face fournie sont directement lisibles sans deviner, y compris les petits caractères.
 Une face recto ou verso seule peut être lisible : ne suppose pas qu'une face absente est floue.
 Dans le doute, utilise uncertain / medium ou low, jamais clear / high par défaut.
+
+PHOTO D'IDENTITÉ : ne reconnais pas la personne et ne déduis aucun attribut personnel.
+Pour une photo de portrait, document_type portrait. Évalue chacun des critères photo_criteria
+sur les seuls éléments visibles : une seule personne réelle photographiée (pas un dessin, logo,
+document d'identité ou capture d'écran), netteté et éclairage homogène sans ombre gênante,
+tête droite de face centrée avec le visage entier, expression neutre bouche fermée,
+yeux ouverts visibles sans reflets ni verres teintés, tête nue et visage dégagé,
+fond uni gris clair ou bleu clair, pas blanc. Vérifie les signes VISIBLES de filtre/retouche
+ou de capture d'écran, sans prétendre détecter toute manipulation. Un portrait photographique
+sans signe visible de ces défauts peut obtenir pass pour no_visible_filter_or_capture.
+Utilise fail pour un défaut visible, uncertain si un critère est impossible à apprécier.
+N'invente pas l'ancienneté, les dimensions physiques ou l'origine agréée de la photo :
+ces éléments ne sont pas vérifiables ici. Pour tout autre type, photo_criteria = not_applicable.
+
+ATTESTATION D'HÉBERGEMENT : vérifie toutes les pages, particulièrement la zone de signature
+de l'hébergeant. Une signature manuscrite visible ou un bloc de signature électronique visible
+peut être present. Un nom tapé seul, la mention « signature », « signé » ou une ligne vide ne
+constituent pas une signature. La signature d'un tiers sur une facture ne constitue pas la
+signature de l'hébergeant sur une attestation. Un document qui n'est pas une attestation
+d'hébergement ne doit jamais être classé hosting_certificate. Si la zone est coupée, floue ou
+ambiguë, utilise uncertain. Ne certifie ni l'authenticité, ni l'identité du signataire, ni la
+validité juridique de la signature. Pour tout autre type, signature not_applicable et
+signature_confidence low. Hors justificatif de domicile, document_date null, date_kind uncertain,
+date_confidence low. Pour un portrait, all_fields_legible false (pas de champs administratifs).
 """
 
 
 def unavailable(kind):
-    detail = ("votre justificatif de domicile a moins de 3 mois"
-              if kind == "proof_address" else "votre pièce d’identité est bien lisible")
+    detail = {
+        "proof_address": "votre justificatif de domicile a moins de 3 mois",
+        "host_identity": "la pièce d’identité de la personne qui vous héberge est bien lisible",
+        "identity_photo": "votre photo d’identité respecte tous les critères indiqués ci-dessus",
+        "hosting_certificate": "l’attestation d’hébergement est bien signée par la personne qui vous héberge",
+    }.get(kind, "votre pièce d’identité est bien lisible")
     return {"status": "unknown", "message": "La vérification automatique n'a pas pu aboutir. "
             f"Veuillez vérifier que {detail}."}
 
@@ -106,15 +158,45 @@ def check_schema(result):
     if result["document_date"] is not None and (not isinstance(result["document_date"], str)
                                                or len(result["document_date"]) != 10):
         raise ValueError("invalid_result")
+    criteria = result["photo_criteria"]
+    if not isinstance(criteria, dict) or set(criteria) != set(PHOTO_CRITERIA) or any(
+            value not in {"pass", "fail", "uncertain", "not_applicable"} for value in criteria.values()):
+        raise ValueError("invalid_result")
     return result
 
 
 def advisory(result, kind, today):
     """Fixed messages, with date arithmetic performed by the server, not the model."""
     result = check_schema(result)
-    expected = "address" if kind == "proof_address" else "identity"
+    expected = {"proof_address": "address", "identity_photo": "portrait",
+                "hosting_certificate": "hosting_certificate"}.get(kind, "identity")
     if result["document_type"] != expected:
+        if kind == "identity_photo" and result["confidence"] == "high" and result["document_type"] != "uncertain":
+            return {"status": "warning", "title": "Une photo d’identité est nécessaire", "message":
+                    "Ce fichier ne semble pas être une photo de portrait adaptée. Déposez une photo officielle de votre visage, de face, sur fond neutre.",
+                    "critical": "Une photo non conforme entraînera le rejet de votre dossier lors du contrôle de conformité."}
         return unavailable(kind)
+    if kind == "identity_photo":
+        failed = [description for key, description in PHOTO_CRITERIA.items() if result["photo_criteria"][key] == "fail"]
+        if failed:
+            return {"status": "warning", "title": "Photo à remplacer", "message":
+                    "Votre photo semble ne pas respecter certains critères. Il faut : " + "; ".join(failed) + ". Souhaitez-vous la remplacer ?",
+                    "critical": "Une photo non conforme entraînera le rejet de votre dossier lors du contrôle de conformité."}
+        if result["confidence"] != "high" or any(value != "pass" for value in result["photo_criteria"].values()):
+            return unavailable(kind)
+        return {"status": "success", "title": "Critères visuels de la photo vérifiés", "message":
+                "Votre photo semble respecter les critères visuels : netteté, visage de face et dégagé, expression neutre et fond adapté. "
+                "Vérifiez aussi qu’elle date de moins de 6 mois et provient d’un photographe ou d’une cabine agréée. Notre équipe confirmera sa conformité."}
+    if kind == "hosting_certificate":
+        if result["signature"] == "absent" and result["signature_confidence"] == "high" and result["confidence"] == "high":
+            return {"status": "warning", "title": "Signature non repérée", "message":
+                    "L’attestation semble ne pas être signée. Faites-la signer par la personne qui vous héberge, puis déposez la version signée.",
+                    "critical": "Une attestation d’hébergement non signée sera rejetée lors du contrôle de conformité."}
+        if result["signature"] != "present" or result["signature_confidence"] != "high" or result["confidence"] != "high":
+            return unavailable(kind)
+        return {"status": "success", "title": "Signature repérée sur l’attestation", "message":
+                "Une signature a été repérée visuellement. Assurez-vous qu’il s’agit bien de celle de la personne qui vous héberge. "
+                "Ce contrôle ne certifie pas son authenticité ; notre équipe vérifiera l’attestation."}
     if kind == "proof_address":
         if result["confidence"] != "high" or result["date_confidence"] != "high" or result["date_kind"] == "uncertain":
             return unavailable(kind)
@@ -126,21 +208,40 @@ def advisory(result, kind, today):
             return unavailable(kind)
         formatted = issued.strftime("%d/%m/%Y")
         if issued <= three_months_before(today):
-            return {"status": "warning", "date": issued.isoformat(), "message":
+            return {"status": "warning", "title": "Justificatif à actualiser", "date": issued.isoformat(), "message":
                     "Votre justificatif de domicile semble dater de 3 mois ou plus "
                     f"(date du document repérée : {formatted}). Souhaitez-vous le remplacer par un document plus récent ?"}
-        return {"status": "info", "date": issued.isoformat(), "message":
-                f"Date du document repérée : {formatted}. Votre justificatif semble dater de moins de 3 mois. "
-                "Cette vérification reste indicative."}
+        return {"status": "success", "title": "Votre justificatif est bien récent", "date": issued.isoformat(), "message":
+                f"Bonne nouvelle ! La date repérée sur votre document est le {formatted} : il date de moins de 3 mois. "
+                "Vous pouvez conserver ce fichier. Notre équipe confirmera sa conformité lors du contrôle du dossier."}
+    subject = "La pièce d’identité de la personne qui vous héberge" if kind == "host_identity" else "Votre pièce d’identité"
     if result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"]:
-        return {"status": "warning", "message":
-                "Votre pièce d’identité semble floue ou certaines informations ne sont pas suffisamment lisibles. "
-                "Souhaitez-vous la remplacer par une photo ou un scan plus net ? Vérifiez le cadrage, les reflets et les petits caractères."}
+        return {"status": "warning", "title": "Attention : pièce d’identité à remplacer", "message":
+                f"{subject} semble floue ou certaines informations ne sont pas suffisamment lisibles. "
+                "Déposez de préférence une photo ou un scan plus net : toutes les informations, y compris les petits caractères, doivent être lisibles, sans reflet et sans bord coupé.",
+                "critical": "Si la pièce d’identité n’est pas parfaitement lisible, elle sera rejetée et votre dossier ne pourra pas être transmis au CNAPS avant son remplacement."}
     if result["readability"] != "clear" or result["confidence"] != "high":
         return unavailable(kind)
-    return {"status": "info", "message":
-            "Aucun problème évident de lisibilité n’a été repéré. Vérifiez néanmoins les petits caractères "
-            "et le recto/verso. Ce contrôle indicatif ne vaut pas validation de votre pièce d’identité."}
+    return {"status": "success", "title": "Lisibilité vérifiée", "message":
+            f"{subject} semble bien lisible : aucun problème évident n’a été repéré sur le fichier fourni. "
+            "Pensez à joindre le recto et le verso. Notre équipe confirmera la conformité du document."}
+
+
+def render_photo(data):
+    """Decode actual JPEG/PNG pixels; discard metadata and bound memory/provider input."""
+    with Image.open(BytesIO(data)) as source:
+        if source.format not in {"JPEG", "PNG"} or getattr(source, "n_frames", 1) != 1:
+            raise ValueError("invalid_photo")
+        if source.width * source.height > 25_000_000:
+            raise ValueError("photo_pixel_limit")
+        source.load()
+        source.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
+        with ImageOps.exif_transpose(source).convert("RGBA") as rgba:
+            with Image.new("RGB", rgba.size, "white") as picture:
+                picture.paste(rgba, mask=rgba.getchannel("A"))
+                stream = BytesIO()
+                picture.save(stream, format="JPEG", quality=95)
+                return [base64.b64encode(stream.getvalue()).decode("ascii")]
 
 
 def render_pages(data):
@@ -173,11 +274,11 @@ def call_openai(images, kind, api_key):
         "store": False,
         "instructions": INSTRUCTIONS,
         "input": [{"role": "user", "content": [
-            {"type": "input_text", "text": "Document à vérifier : " + ("justificatif de domicile" if kind == "proof_address" else "pièce d'identité")},
+            {"type": "input_text", "text": "Document à vérifier : " + KIND_LABELS[kind]},
             *[{"type": "input_image", "image_url": "data:image/jpeg;base64," + image, "detail": "high"} for image in images],
         ]}],
         "text": {"format": {"type": "json_schema", "name": "document_visual_check", "strict": True, "schema": SCHEMA}},
-        "max_output_tokens": 600,
+        "max_output_tokens": 1000,
     }
     req = Request("https://api.openai.com/v1/responses", data=json.dumps(payload).encode("utf-8"),
                   headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}, method="POST")
@@ -249,7 +350,8 @@ def register_document_analysis(app, db_path):
             if not api_key:
                 return jsonify(unavailable(kind))
             upload = request.files.get("document")
-            if not upload or not upload.filename.lower().endswith(".pdf"):
+            extensions = (".jpg", ".jpeg", ".png") if kind == "identity_photo" else (".pdf",)
+            if not upload or not upload.filename.lower().endswith(extensions):
                 return jsonify(unavailable(kind)), 400
             data = upload.stream.read(MAX_BYTES + 1)
             if not data or len(data) > MAX_BYTES:
@@ -266,7 +368,7 @@ def register_document_analysis(app, db_path):
             try:
                 if not reserve_usage(db_path(), token, now):
                     return jsonify(unavailable(kind)), 429
-                images = render_pages(data)
+                images = render_photo(data) if kind == "identity_photo" else render_pages(data)
                 result = advisory(call_openai(images, kind, api_key), kind, today)
                 with _cache_lock:
                     _cache[key] = (now, result)

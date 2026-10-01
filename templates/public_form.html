@@ -6,7 +6,7 @@
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='visual-2') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -232,14 +232,14 @@
       <div class="section">
         <div class="section-badge">📄 Étape 2</div>
         <h2>Documents à déposer</h2>
+        <p class="hint">À la sélection, votre photo, les pièces d’identité (la vôtre et celle de votre hébergeant), le justificatif de domicile et l’attestation d’hébergement sont transmis à OpenAI pour une vérification indicative. Les alertes ne bloquent pas l’envoi ; notre équipe effectuera le contrôle final.</p>
         <section class="identity-photo-card" aria-labelledby="photo-title">
           <h3 class="photo-heading" id="photo-title">📷 Photo d'identité officielle <span class="photo-required">Obligatoire</span></h3>
           <p class="photo-subtitle">Photo de face de votre visage sur fond neutre — JPEG ou PNG.</p>
           {% include '_identity_photo_guidance.html' %}
           <label for="identity_photo">Déposer ma photo d'identité</label>
-          <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-identity-photo required>
+          <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-document-check="identity_photo" data-identity-photo required>
         </section>
-        <p class="hint">Les pièces d'identité et justificatifs de domicile sélectionnés sont transmis à OpenAI pour une vérification indicative. Vous pouvez poursuivre quelle que soit l'alerte ; notre équipe effectuera le contrôle final.</p>
         <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
         <input type="file" name="identity" accept="application/pdf,.pdf" data-document-check="identity" multiple required>
         <div class="upload-status" data-upload-status="identity"></div>
@@ -410,7 +410,8 @@
     }
     heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
   </script>
+  {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='openai-1') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='visual-2') }}"></script>
 </body>
 </html>
