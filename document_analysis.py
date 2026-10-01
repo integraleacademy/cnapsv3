@@ -135,7 +135,8 @@ informations utiles : si elles sont toutes lisibles, les seuls motifs de sécuri
 produire ni blur, ni glare, ni small_text, ni unreadable_fields.
 Une face recto ou verso seule peut être lisible : ne suppose pas qu'une face absente est floue.
 Dans le doute, utilise uncertain / medium ou low, jamais clear / high par défaut.
-Tu reçois UNE PAGE ENTIÈRE puis quatre VUES DE DÉTAIL de cette même page. Ces détails ne sont
+Tu reçois UNE PAGE ENTIÈRE puis quatre VUES DE DÉTAIL de cette même page, rapprochées sur la
+zone principale lorsqu'elle est entourée de larges marges blanches. Ces détails ne sont
 PAS des pages ou faces supplémentaires. Examine les détails pour juger les contours des petits
 caractères et les reflets, mais utilise uniquement la vue entière pour les bords et les faces.
 Pour chaque identity_checks : sharp_text = pass si les caractères administratifs sont assez
@@ -336,7 +337,7 @@ def render_photo(data):
                 return [base64.b64encode(stream.getvalue()).decode("ascii")]
 
 
-def render_pages(data):
+def render_pages(data, max_dimension=2400):
     """Send visible pixels only: an invisible PDF text layer cannot prove legibility."""
     if not data.startswith(b"%PDF-"):
         raise ValueError("invalid_pdf")
@@ -351,7 +352,7 @@ def render_pages(data):
                     width, height = page.get_size()
                     if not (width > 0 and height > 0):
                         raise ValueError("invalid_page")
-                    scale = min(4, 2400 / max(width, height))
+                    scale = min(4, max_dimension / max(width, height))
                     with closing(page.render(scale=scale, draw_annots=True)) as bitmap:
                         with bitmap.to_pil().convert("RGB") as picture:
                             stream = BytesIO()
@@ -360,13 +361,45 @@ def render_pages(data):
     return images
 
 
+def identity_detail_band(picture):
+    """Focus details on one dominant scan, keeping the full page as the first view."""
+    width, height = picture.size
+    probe_width = min(160, width)
+    with picture.convert("L") as grayscale:
+        with grayscale.resize((probe_width, max(1, round(height * probe_width / width)))) as probe:
+            values = probe.tobytes()
+            rows = [sum(value < 240 for value in values[y * probe_width:(y + 1) * probe_width]) for y in range(probe.height)]
+            active = [y for y, count in enumerate(rows) if count >= max(1, probe_width * .08)]
+            if not active:
+                return 0, height
+            bands = []
+            start = end = active[0]
+            for y in active[1:]:
+                if y - end > max(2, round(probe.height * .03)):
+                    bands.append((start, end + 1))
+                    start = y
+                end = y
+            bands.append((start, end + 1))
+            substantial = [(top, bottom) for top, bottom in bands if bottom - top >= probe.height * .15]
+            if len(substantial) != 1:
+                return 0, height
+            top, bottom = substantial[0]
+            # Do not focus away a second face or a substantial separate text block.
+            if sum(rows[top:bottom]) < sum(rows) * .9:
+                return 0, height
+            padding = round(height * .02)
+            return max(0, int(top * height / probe.height) - padding), min(height, int(bottom * height / probe.height) + padding)
+
+
 def identity_views(encoded):
     """Keep full-page context plus native-resolution details; never sharpen or invent pixels."""
     views = [encoded]
     with Image.open(BytesIO(base64.b64decode(encoded))) as picture:
         width, height = picture.size
+        top_edge, bottom_edge = identity_detail_band(picture)
+        detail_height = bottom_edge - top_edge
         for left, top, right, bottom in [(0, 0, .6, .6), (.4, 0, 1, .6), (0, .4, .6, 1), (.4, .4, 1, 1)]:
-            with picture.crop((int(left * width), int(top * height), int(right * width), int(bottom * height))) as detail:
+            with picture.crop((int(left * width), top_edge + int(top * detail_height), int(right * width), top_edge + int(bottom * detail_height))) as detail:
                 stream = BytesIO()
                 detail.save(stream, format="JPEG", quality=95)
                 views.append(base64.b64encode(stream.getvalue()).decode("ascii"))
@@ -501,7 +534,7 @@ def register_document_analysis(app, db_path):
             if not _slots.acquire(blocking=False):
                 return jsonify(unavailable(kind)), 429
             try:
-                images = render_photo(data) if kind == "identity_photo" else render_pages(data)
+                images = render_photo(data) if kind == "identity_photo" else render_pages(data, max_dimension=3200 if kind in {"identity", "host_identity"} else 2400)
                 units = len(images) if kind in {"identity", "host_identity"} else 1
                 if not reserve_usage(db_path(), token, now, units=units):
                     return jsonify(unavailable(kind)), 429

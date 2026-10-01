@@ -91,6 +91,27 @@ class AdvisoryTests(unittest.TestCase):
         self.assertEqual(answer["status"], "success")
         self.assertIn("30/09/2026", answer["message"])
 
+    def test_identity_details_focus_on_scan_instead_of_white_margins(self):
+        image = Image.new("RGB", (1000, 1400), "white")
+        image.paste((80, 100, 120), (0, 350, 1000, 1050))
+        image.paste((80, 80, 80), (800, 1330, 950, 1360))
+        top, bottom = checks.identity_detail_band(image)
+        self.assertLessEqual(top, 350)
+        self.assertGreaterEqual(bottom, 1050)
+        self.assertGreater(top, 280)
+        self.assertLess(bottom, 1120)
+        stream = io.BytesIO(); image.save(stream, format="JPEG")
+        encoded = base64.b64encode(stream.getvalue()).decode("ascii")
+        views = checks.identity_views(encoded)
+        self.assertEqual(views[0], encoded, "the whole page remains available for framing and other content")
+        with Image.open(io.BytesIO(base64.b64decode(views[1]))) as detail:
+            self.assertEqual(detail.width, 600)
+            self.assertLess(detail.height, 600)
+        two_faces = Image.new("RGB", (1000, 1400), "white")
+        two_faces.paste((80, 100, 120), (0, 100, 1000, 450))
+        two_faces.paste((80, 100, 120), (0, 750, 1000, 1100))
+        self.assertEqual(checks.identity_detail_band(two_faces), (0, 1400))
+
     def test_calendar_boundary_old_recent_and_future_dates(self):
         self.assertEqual(checks.three_months_before(date(2024, 5, 31)), date(2024, 2, 29))
         self.assertEqual(checks.three_months_before(date(2026, 5, 31)), date(2026, 2, 28))
