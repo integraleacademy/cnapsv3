@@ -70,7 +70,7 @@ class AdvisoryTests(unittest.TestCase):
                 self.assertNotEqual(checks.advisory({**result, **changes}, kind, date.today())["status"], "success")
             for key in ("all_fields_readable", "whole_document_visible", "no_glare", "no_obstruction"):
                 changed = {**result, "identity_checks": {**result["identity_checks"], key: "fail"}}
-                self.assertEqual(checks.advisory(changed, kind, date.today())["status"], "warning")
+                self.assertEqual(checks.advisory(changed, kind, date.today())["status"], "unknown" if key == "all_fields_readable" else "warning")
 
     def test_identity_evidence_combines_pdf_pages_without_extracting_identity_values(self):
         front = model_result(identity_sides=["front"])
@@ -144,12 +144,29 @@ class AdvisoryTests(unittest.TestCase):
             result.update(fields)
             self.assertEqual(checks.advisory(result, "proof_address", date(2026, 10, 1)), checks.unavailable("proof_address"))
 
-    def test_even_slight_blur_is_flagged_despite_some_readable_text(self):
+    def test_partially_readable_text_is_never_automatically_accepted(self):
         for fields in [{"readability": "slightly_blurred"}, {"problems": ["blur"]},
                        {"all_fields_legible": False}, {"problems": ["cropped"]},
                        {"confidence": "medium", "problems": ["small_text"]}]:
             result = model_result(**{"all_fields_legible": False, **fields})
-            self.assertEqual(checks.advisory(result, "identity", date.today())["status"], "warning")
+            expected = "unknown" if fields in ({"readability": "slightly_blurred"}, {"problems": ["blur"]}) else "warning"
+            self.assertEqual(checks.advisory(result, "identity", date.today())["status"], expected)
+
+    def test_ambiguous_soft_scan_gets_human_review_instead_of_a_replacement_verdict(self):
+        soft = model_result(readability="slightly_blurred", problems=["blur"], all_fields_legible=False,
+                            identity_checks={key: "fail" if key in {"sharp_text", "all_fields_readable"} else "pass" for key in checks.IDENTITY_CHECKS})
+        for kind in ("identity", "host_identity"):
+            answer = checks.advisory(soft, kind, date.today())
+            self.assertEqual(answer["status"], "unknown")
+            self.assertIn("pas un refus", answer["message"])
+            self.assertNotIn("critical", answer)
+        with patch.object(checks, "call_openai", side_effect=[model_result(), soft]):
+            result = checks.analyze_images(["front", "back"], "identity", "test-key", date.today())
+            self.assertEqual(result["status"], "unknown")
+            self.assertTrue(result["message"].startswith("Page 2 : "))
+            self.assertIn("pas un refus", result["message"])
+        with patch.object(checks, "call_openai", side_effect=[soft, model_result(problems=["glare"])]):
+            self.assertEqual(checks.analyze_images(["front", "back"], "identity", "test-key", date.today())["status"], "warning")
 
     def test_clear_result_is_cautious_and_unknown_never_means_validated(self):
         answer = checks.advisory(model_result(), "host_identity", date.today())
