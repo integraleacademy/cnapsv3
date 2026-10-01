@@ -8,8 +8,6 @@
 .saas-title-icon { width:42px; height:42px; border-radius:14px; display:grid; place-items:center; flex:0 0 auto; background:#ecfdf5; color:#16a34a; }
 .saas-title-icon svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .card-kicker { color:#64748b; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
-.saas-helper { margin:0 0 12px; padding:14px 16px; border:1px solid #dbeafe; border-radius:16px; background:#eff6ff; color:#1e3a8a; font-weight:750; line-height:1.45; }
-.document-analysis-notice { margin:0 0 16px; font-size:12px; line-height:1.5; color:#64748b; }
 .documents-summary-progress { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:13px; font-weight:800; white-space:nowrap; }
 .documents-summary-progress-track { width:92px; height:7px; border-radius:999px; background:#dbeafe; overflow:hidden; }
 .documents-summary-progress-fill, .documents-upload-progress-fill { display:block; height:100%; width:0%; border-radius:inherit; background:linear-gradient(90deg,#2563eb,#22c55e); transition:width .25s ease; }

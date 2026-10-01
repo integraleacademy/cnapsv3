@@ -1,9 +1,9 @@
 import { analyzeDocument } from './document-analysis.mjs';
 import { unavailableMessage, checkPresentation } from './document-check-rules.mjs';
-import { documentCheckModal } from './document-check-modal.mjs';
+import { documentCheckModal } from './document-check-modal.mjs?v=accordion-3';
 import { replacementButton, attachOtherFileActions } from './document-file-actions.mjs';
 import { identityCompleteness, identityEvidenceLabel } from './identity-completeness.mjs';
-import { attachDocumentUploadLayout, setDocumentRowResult } from './document-upload-layout.mjs';
+import { attachDocumentUploadLayout, setDocumentRowResult } from './document-upload-layout.mjs?v=accordion-3';
 
 function button(label, action, secondary = false) {
   const element = document.createElement('button');
