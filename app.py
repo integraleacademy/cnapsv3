@@ -23,6 +23,7 @@ import hmac
 import logging
 import warnings
 from PIL import Image, UnidentifiedImageError
+from document_analysis import register_document_analysis
 
 
 
@@ -90,6 +91,7 @@ UPLOAD_DIR = os.getenv("CNAPS_UPLOAD_DIR", "/mnt/data/uploads")
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
 app.jinja_env.globals["document_check_today"] = lambda: datetime.now(FRANCE_TZ).date().isoformat()
+register_document_analysis(app, lambda: DB_NAME)
 
 
 MONTHS_FR = {

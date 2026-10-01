@@ -40,12 +40,4 @@ button.document-check-button {
 }
 button.document-check-button.secondary { background: #fff; color: #334155; border-color: #94a3b8; }
 .document-check-note { font-size: .84rem; }
-.hosting-signature-reminder {
-  border-left: 4px solid #f59e0b;
-  background: #fffbeb;
-  color: #854d0e;
-  border-radius: 8px;
-  padding: 12px;
-  line-height: 1.5;
-}
 @media (max-width: 640px) { button.document-check-button { width: 100%; } }

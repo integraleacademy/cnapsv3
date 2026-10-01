@@ -96,8 +96,9 @@ class IdentityPhotoTests(unittest.TestCase):
         for doc_type in ("identity", "host_identity", "proof_address", "hosting_certificate"):
             self.assertIn(f'data-document-check="{doc_type}"', html)
         self.assertIn('data-check-date="', html)
-        self.assertIn("Avez-vous vérifié que l'attestation d'hébergement est bien signée", html)
-        self.assertIn('type="module" src="/static/document-checks.mjs"', html)
+        self.assertNotIn("Avez-vous vérifié que l'attestation d'hébergement est bien signée", html)
+        self.assertIn('data-check-token="', html)
+        self.assertIn('type="module" src="/static/document-checks.mjs?v=openai-1"', html)
 
     def test_photo_is_visible_at_top_of_admin_document_page(self):
         request_id = self.create_request()
