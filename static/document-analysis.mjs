@@ -43,14 +43,18 @@ async function readRenderedPage(page, context, libraries) {
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
   try {
+    context.stage = 'pdf-render';
     const drawing = canvas.getContext('2d', { alpha: false });
     await page.render({ canvasContext: drawing, viewport, background: '#ffffff' }).promise;
     assertActive(context);
     if (!context.worker) {
+      context.stage = 'ocr-load';
       context.worker = await libraries.createWorker();
       if (context.cancelled) { await context.worker.terminate(); throw stopped(); }
+      context.stage = 'ocr-settings';
       await context.worker.setParameters({ tessedit_pageseg_mode: '3', user_defined_dpi: '200' });
     }
+    context.stage = 'ocr-read';
     const { data } = await context.worker.recognize(libraries.canvasImage(canvas));
     assertActive(context);
     return { text: data.text || '', confidence: data.confidence || 0 };
@@ -105,7 +109,7 @@ async function inspect(file, kind, today, context, libraries) {
 }
 
 export async function analyzeWithLibraries(file, kind, today, libraries, { signal, timeoutMs = 90000 } = {}) {
-  const context = { cancelled: false, worker: null, pdfTask: null };
+  const context = { cancelled: false, worker: null, pdfTask: null, stage: 'pdf-open' };
   let rejectCancellation;
   const cancellation = new Promise((_, reject) => { rejectCancellation = reject; });
   const cancel = () => {
@@ -119,6 +123,15 @@ export async function analyzeWithLibraries(file, kind, today, libraries, { signa
   if (signal?.aborted) cancel();
   try {
     return await Promise.race([inspect(file, kind, today, context, libraries), cancellation]);
+  } catch (error) {
+    if (!context.cancelled) {
+      // Do not log filenames, document contents, OCR text or PDF parser errors.
+      // OCR initialisation only loads public code/models, so its error is safe.
+      const detail = ['ocr-load', 'ocr-settings'].includes(context.stage)
+        ? String(error?.message || error) : String(error?.name || 'Error');
+      console.warn(`[document-check] ${context.stage}: ${detail}`);
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', cancel);
