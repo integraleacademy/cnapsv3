@@ -6,7 +6,7 @@
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='accordion-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css', v='accordion-2') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -204,7 +204,7 @@
       .section { padding: 14px; }
     }
   </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='document-upload-layout.css', v='accordion-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-upload-layout.css', v='accordion-2') }}">
   <style>
     body { background:#f6f8fb; color:#0f172a; }
     .wrap { max-width:1180px; padding:22px; background:transparent; border:0; box-shadow:none; }
@@ -424,6 +424,6 @@
   </script>
   {% include '_document_analysis_modal.html' %}
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='accordion-1') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='accordion-2') }}"></script>
 </body>
 </html>
