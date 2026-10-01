@@ -124,6 +124,15 @@ class AdvisoryTests(unittest.TestCase):
         for fields in [{"readability": "uncertain"}, {"confidence": "medium"}, {"document_type": "other"}]:
             self.assertEqual(checks.advisory(model_result(**fields), "identity", date.today())["status"], "unknown")
 
+    def test_identity_warning_names_the_observed_problem_without_inventing_blur(self):
+        answer = checks.advisory(model_result(problems=["glare"]), "identity", date.today())
+        self.assertIn("un reflet semble gêner la lecture", answer["message"])
+        self.assertNotIn("semblent flous", answer["message"])
+        with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(problems=["cropped"])]):
+            answer = checks.analyze_images(["front", "back"], "identity", "test-key", date.today())
+        self.assertTrue(answer["message"].startswith("Page 2 : "))
+        self.assertIn("une zone utile semble coupée", answer["message"])
+
     def test_unreadable_candidate_and_host_ids_warn_of_rejection(self):
         for kind in ["identity", "host_identity"]:
             answer = checks.advisory(model_result(problems=["blur"]), kind, date.today())

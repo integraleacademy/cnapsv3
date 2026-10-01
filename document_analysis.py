@@ -294,8 +294,23 @@ def advisory(result, kind, today):
                 "Vous pouvez conserver ce fichier. Notre équipe confirmera sa conformité lors du contrôle du dossier."}
     subject = "La pièce d’identité de la personne qui vous héberge" if kind == "host_identity" else "Votre pièce d’identité"
     if result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"] or "fail" in result["identity_checks"].values():
+        quality = result["identity_checks"]
+        problems = result["problems"]
+        reasons = []
+        for detected, message in [
+            (quality["sharp_text"] == "fail" or result["readability"] in {"slightly_blurred", "poor"} or "blur" in problems, "des caractères utiles semblent flous"),
+            (quality["no_glare"] == "fail" or "glare" in problems, "un reflet semble gêner la lecture"),
+            (quality["whole_document_visible"] == "fail" or "cropped" in problems, "une zone utile semble coupée"),
+            (quality["no_obstruction"] == "fail", "une information semble masquée"),
+            ("small_text" in problems, "certains caractères semblent trop petits"),
+            ("low_contrast" in problems, "le contraste semble insuffisant"),
+        ]:
+            if detected:
+                reasons.append(message)
+        if not reasons:
+            reasons.append("certaines informations ne peuvent pas être lues avec certitude")
         return {"status": "warning", "title": "Attention : pièce d’identité à remplacer", "message":
-                f"{subject} semble floue ou certaines informations ne sont pas suffisamment lisibles. "
+                f"{subject} est à vérifier : " + "; ".join(reasons) + ". "
                 "Déposez de préférence une photo ou un scan plus net : toutes les informations, y compris les petits caractères, doivent être lisibles, sans reflet et sans bord coupé.",
                 "critical": "Si la pièce d’identité n’est pas parfaitement lisible, elle sera rejetée et votre dossier ne pourra pas être transmis au CNAPS avant son remplacement."}
     if result["readability"] != "clear" or result["confidence"] != "high" or any(value != "pass" for value in result["identity_checks"].values()):
@@ -400,7 +415,7 @@ def analyze_images(images, kind, api_key, today):
     deadline = time.monotonic() + 25
     answers = []
     evidence = []
-    for image in images:
+    for number, image in enumerate(images, 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return unavailable(kind)
@@ -409,6 +424,8 @@ def analyze_images(images, kind, api_key, today):
             evidence.append({"type": inspected["identity_document"], "sides": inspected["identity_sides"], "confidence": inspected["side_confidence"]})
         answer = advisory(inspected, kind, today)
         if answer["status"] == "warning":
+            if len(images) > 1:
+                answer = {**answer, "message": f"Page {number} : " + answer["message"]}
             return answer
         answers.append(answer)
     if not answers or any(answer["status"] != "success" for answer in answers):
