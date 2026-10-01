@@ -432,13 +432,26 @@ def call_openai(images, kind, api_key, timeout=25):
         model = os.getenv("OPENAI_IDENTITY_MODEL", "").strip() or "gpt-5.4"
         if len(images) != 1:
             raise ValueError("identity_requires_one_page")
-        images = identity_views(images[0])
     # Preserve small administrative characters instead of downsampling scans.
     original_detail = model == "gpt-5.4" or model.startswith("gpt-5.4-2026-")
+    if identity and not original_detail:
+        images = identity_views(images[0])
+    instructions = INSTRUCTIONS
+    if identity and original_detail:
+        start = instructions.index("Tu reçois UNE PAGE ENTIÈRE")
+        end = instructions.index("Pour chaque identity_checks", start)
+        instructions = instructions[:start] + (
+            "Tu reçois UNE PAGE ENTIÈRE en résolution originale. Examine les champs à cette "
+            "résolution. Les marges blanches du PDF ne sont pas des parties manquantes. "
+            "Juge la lisibilité des valeurs personnelles imprimées, pas la netteté des petits "
+            "libellés bilingues standard, des légendes ou des éléments de sécurité. "
+            "Un bord extérieur légèrement rogné n'est pas cropped si toutes les valeurs "
+            "utiles et la photographie principale restent entièrement visibles.\n"
+        ) + instructions[end:]
     payload = {
         "model": model,
         "store": False,
-        "instructions": INSTRUCTIONS,
+        "instructions": instructions,
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": "Document à vérifier : " + KIND_LABELS[kind]},
             *[{"type": "input_image", "image_url": "data:image/jpeg;base64," + image, "detail": "original" if original_detail else "high"} for image in images],
