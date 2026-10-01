@@ -1,4 +1,5 @@
 <!doctype html>
+{% from '_admin_document_analysis.html' import analysis_badge %}
 <html lang="fr">
 <head>
   <meta charset="utf-8">
@@ -6,6 +7,7 @@
   <title>Gérer les documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin-document-analysis.css', v='1') }}">
   <style>
     :root {
       --bg: #f3f4f6;
@@ -469,6 +471,7 @@
           <h2>Photo d'identité</h2>
           <p>{% if photo.is_conforme == 1 %}✅ Conforme{% elif photo.is_conforme == 0 %}❌ Non conforme{% else %}⏳ À contrôler{% endif %}</p>
           {% if photo.non_conformite_reason %}<p>{{ photo.non_conformite_reason }}</p>{% endif %}
+          {{ analysis_badge(photo.auto_analysis) }}
           <a class="doc-link" href="#controle-photo-identite">Contrôler ou remplacer la photo ↓</a>
         </div>
       {% else %}
@@ -541,7 +544,10 @@
         {% endif %}
         {% for d in docs %}
           <div class="doc">
-            <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
+            <div class="doc-heading">
+              <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
+              {{ analysis_badge(d.auto_analysis) }}
+            </div>
             {% if doc_type == 'identity_photo' %}
               <a href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener" aria-label="Ouvrir la photo d'identité en taille réelle">
                 <img class="photo-preview" src="/uploads/{{ req.id }}/{{ d.stored_name }}" alt="Photo d'identité à contrôler" loading="lazy">

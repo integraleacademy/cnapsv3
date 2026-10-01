@@ -57,6 +57,14 @@ function cardFor(input, file, kind) {
       message.textContent = checkPresentation[kind].pending;
     },
     result(result) {
+      card.querySelector('input[name="document_analysis_receipts"]')?.remove();
+      if (typeof result.receipt === 'string') {
+        const receipt = document.createElement('input');
+        receipt.type = 'hidden';
+        receipt.name = 'document_analysis_receipts';
+        receipt.value = result.receipt;
+        card.append(receipt);
+      }
       card.setAttribute('aria-busy', 'false');
       card.className = `document-check document-check--${result.status}`;
       icon.textContent = result.status === 'success' ? '✓' : result.status === 'warning' ? '!' : 'i';
