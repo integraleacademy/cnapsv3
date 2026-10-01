@@ -15,11 +15,11 @@ export function unavailableMessage(kind) {
 
 export const checkPresentation = {
   proof_address: { label: 'Votre justificatif de domicile', pending: 'Un instant, je vérifie votre justificatif de domicile…',
-    steps: ['Lecture de la date du document', 'Vérification du délai de 3 mois', 'Préparation de votre résultat'] },
+    steps: ['Vérification du type de justificatif', 'Lecture de la date du document', 'Vérification du délai de 3 mois'] },
   identity: { label: 'Votre pièce d’identité', pending: 'Un instant, je vérifie la lisibilité de votre pièce d’identité…',
-    steps: ['Netteté et petits caractères', 'Cadrage, reflets et contraste', 'Vérification de chaque page fournie'] },
+    steps: ['Netteté et petits caractères', 'Cadrage, reflets et contraste', 'Identification du type de pièce et des faces'] },
   host_identity: { label: 'La pièce d’identité de votre hébergeant', pending: 'Un instant, je vérifie la lisibilité de la pièce d’identité de la personne qui vous héberge…',
-    steps: ['Netteté et petits caractères', 'Cadrage, reflets et contraste', 'Vérification de chaque page fournie'] },
+    steps: ['Netteté et petits caractères', 'Cadrage, reflets et contraste', 'Identification du type de pièce et des faces'] },
   identity_photo: { label: 'Votre photo d’identité', pending: 'Un instant, je vérifie les critères visuels de votre photo d’identité…',
     steps: ['Netteté, éclairage et fond', 'Visage de face et bien dégagé', 'Expression et cadrage du portrait'] },
   hosting_certificate: { label: 'Votre attestation d’hébergement', pending: 'Un instant, je vérifie la présence d’une signature sur votre attestation d’hébergement…',

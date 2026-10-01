@@ -1,36 +1,64 @@
 # Contrôle indicatif des documents
 
-Configurer `OPENAI_API_KEY` dans l’environnement Render, puis enregistrer et redéployer.
-Le modèle par défaut est `gpt-4.1` ; `OPENAI_DOCUMENT_MODEL` permet de le changer.
-Utiliser un modèle compatible avec les images, Responses et les sorties JSON structurées.
+Configurer `OPENAI_API_KEY` dans Render. La clé reste uniquement côté serveur.
+Le modèle par défaut est `gpt-4.1` ; `OPENAI_DOCUMENT_MODEL` peut sélectionner un modèle
+compatible avec les images, Responses et les sorties JSON structurées.
 
-Le navigateur envoie uniquement les fichiers sélectionnés pour l’identité, l’identité de
-l’hébergeant et le domicile à `/api/document-analysis`. Le formulaire annonce leur transmission
-à OpenAI. La clé reste sur le serveur. L’attestation d’hébergement affiche seulement un rappel
-de signature après sélection ; elle n’est pas envoyée à OpenAI.
+À la sélection, le formulaire et la page de remplacement transmettent à OpenAI les fichiers
+concernés : photo, identité du candidat/de l’hébergeant, domicile et attestation d’hébergement.
+Le texte d’information précède le dépôt. Les résultats sont indicatifs, ne bloquent pas l’envoi
+et ne modifient jamais la conformité enregistrée par l’administration.
 
-Le serveur rend les pages visibles du PDF, sans utiliser sa couche de texte cachée, puis envoie
-ces images à l’API Responses avec `store=false`. Il ne crée pas de fichier OpenAI avec Files API.
-Les fichiers ne sont pas conservés par cette vérification ; leur enregistrement habituel ne se
-fait qu’à l’envoi du formulaire. Aucun nom, adresse ou numéro d’identité n’est demandé dans la
-réponse. Ne pas journaliser les corps des requêtes/réponses du fournisseur.
+## Analyse visuelle
 
-La date du document est extraite par le modèle, puis comparée à trois mois calendaires côté
-serveur (date française). Une attestation « en date du X, depuis Y » doit utiliser X. La moindre
-détection de flou ou de caractères difficiles à lire produit une alerte. Aucun résultat ne
-modifie le statut de conformité enregistré par l’administration.
+Les PDF sont rendus en pixels : la couche de texte invisible ne peut pas prouver la lisibilité.
+Chaque page d’identité est analysée séparément, avec sa vue entière et quatre détails qui
+se chevauchent. Aucun filtre de netteté ne reconstruit les caractères. Les contrôles portent
+sur les contours du texte, tous les champs, les bords/coins, les reflets et les masquages.
+Un défaut produit une alerte ; une incertitude ne peut pas donner un résultat positif.
+Un budget de 25 secondes couvre l’ensemble des pages. Une page problématique suffit à arrêter
+le contrôle avec une alerte. Les appels sont réservés dans le quota avant l’analyse.
 
-Limites : 5 Mo, 4 pages, 2 analyses simultanées par processus, 30 analyses par session et par
-heure, 600 par jour pour le service. Les compteurs SQLite ne contiennent pas les documents.
-Les résultats d’une même session sont mis en cache en mémoire pendant 10 minutes (128 entrées
-maximum). Appel API sans relance automatique, délai réseau de 25 secondes ; navigateur 35 secondes.
-Les threads Gunicorn maintiennent l’accès au formulaire pendant cette attente ; les appels
-PDFium sont protégés par un verrou car cette bibliothèque n’est pas compatible avec des appels
-simultanés entre threads.
+La réponse fournit seulement le type de pièce et les faces observées, sans nom, numéro ni
+comparaison de visage. Le navigateur combine ces observations sur tous les fichiers sélectionnés :
+carte d’identité/titre de séjour = recto ET verso du même type ; passeport = page avec photo.
+Deux rectos ne remplacent pas un verso. Il est possible de déposer un PDF regroupé ou deux PDF.
+Sur la page de remplacement, les anciens documents conservés ne sont pas réanalysés : un rappel
+sur le dossier existant évite de présenter une face déjà transmise comme manquante.
 
-Une clé absente, une limite atteinte, une erreur API ou un résultat incertain affiche le message
-adapté au type de document. L’utilisateur conserve toujours la possibilité de poursuivre.
+La photo est contrôlée selon les critères visibles et reçoit un message positif court.
+L’attestation est examinée pour la présence visuelle de la signature de l’hébergeant ; cette
+observation ne certifie pas l’authenticité de la signature.
+
+## Domicile — règles du formulaire
+
+Sont admis, à condition de dater de moins de trois mois : eau, gaz, électricité, gaz/électricité,
+quittance de loyer, téléphone fixe seul, ainsi que les attestations de fournisseur d’énergie
+(déjà prises en charge, notamment ENGIE). Mobile, Internet/fibre/ADSL/box et les offres groupées
+Internet + fixe sont refusés. Le fournisseur ou la présence d’un numéro fixe ne suffit pas à
+identifier un abonnement fixe seul. Un type incertain ne peut pas donner un résultat positif.
+La date extraite est comparée à trois mois calendaires côté serveur (date française).
+Une attestation « en date du X, depuis Y » utilise X, pas le début de contrat Y.
+
+## Dépôt et sécurité
+
+Tous les fichiers sélectionnés peuvent être remplacés avant l’envoi, même après un résultat
+positif, pendant l’analyse ou après avoir cliqué sur Conserver. Le remplacement d’une face
+conserve les autres fichiers ; annuler la sélection conserve l’ancien document.
+
+Le serveur utilise Responses avec `store=false`, sans Files API. Aucun fichier n’est conservé
+par cette vérification. Le dépôt habituel n’enregistre les documents qu’à l’envoi du formulaire.
+Ne pas journaliser les corps des requêtes/réponses du fournisseur ni les documents.
+
+Limites : 5 Mo par fichier, 4 pages par PDF, 2 analyses simultanées par processus,
+30 appels réservés par session/heure, 600 par jour pour le service. Les compteurs SQLite
+ne contiennent pas les documents. Cache en mémoire de 10 minutes (128 entrées maximum).
+Pas de relance automatique ; délai réseau de 25 secondes, navigateur 35 secondes.
+Les threads Gunicorn maintiennent le formulaire disponible pendant l’analyse. Un verrou
+protège PDFium, qui n’est pas compatible avec des appels simultanés entre threads.
+
+Une erreur, une limite ou une clé absente conserve toujours la possibilité de poursuivre.
 
 Tests : `python -m unittest discover -s tests` et `node --test tests/*.test.mjs`.
-Utiliser `CNAPS_DB_PATH` et `CNAPS_UPLOAD_DIR` temporaires pour les tests ; ne jamais soumettre
-de demande réelle ni envoyer de notification pendant les vérifications.
+Utiliser `CNAPS_DB_PATH` et `CNAPS_UPLOAD_DIR` temporaires. Ne jamais créer de demande réelle
+ni envoyer de notification pendant les vérifications.
