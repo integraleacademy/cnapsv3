@@ -55,8 +55,22 @@ class AdvisoryTests(unittest.TestCase):
     def test_every_quality_criterion_can_veto_otherwise_readable_identity(self):
         for key in checks.IDENTITY_CHECKS:
             for value, expected in [("fail", "warning"), ("uncertain", "unknown"), ("not_applicable", "unknown")]:
+                if key == "sharp_text" and value == "fail":
+                    expected = "success"  # Soft edges alone do not make readable fields illegible.
                 fields = model_result(identity_checks={criterion: value if criterion == key else "pass" for criterion in checks.IDENTITY_CHECKS})
                 self.assertEqual(checks.advisory(fields, "identity", date.today())["status"], expected, (key, value))
+
+    def test_soft_but_fully_readable_scan_is_accepted_without_ignoring_real_defects(self):
+        result = model_result(readability="slightly_blurred", problems=["blur"],
+            identity_checks={key: "fail" if key == "sharp_text" else "pass" for key in checks.IDENTITY_CHECKS})
+        for kind in ("identity", "host_identity"):
+            self.assertEqual(checks.advisory(result, kind, date.today())["status"], "success")
+            for changes in ({"all_fields_legible": False}, {"readability": "poor"},
+                            {"problems": ["blur", "glare"]}, {"problems": ["cropped"]}, {"confidence": "medium"}):
+                self.assertNotEqual(checks.advisory({**result, **changes}, kind, date.today())["status"], "success")
+            for key in ("all_fields_readable", "whole_document_visible", "no_glare", "no_obstruction"):
+                changed = {**result, "identity_checks": {**result["identity_checks"], key: "fail"}}
+                self.assertEqual(checks.advisory(changed, kind, date.today())["status"], "warning")
 
     def test_identity_evidence_combines_pdf_pages_without_extracting_identity_values(self):
         front = model_result(identity_sides=["front"])
@@ -134,7 +148,7 @@ class AdvisoryTests(unittest.TestCase):
         for fields in [{"readability": "slightly_blurred"}, {"problems": ["blur"]},
                        {"all_fields_legible": False}, {"problems": ["cropped"]},
                        {"confidence": "medium", "problems": ["small_text"]}]:
-            result = model_result(**fields)
+            result = model_result(**{"all_fields_legible": False, **fields})
             self.assertEqual(checks.advisory(result, "identity", date.today())["status"], "warning")
 
     def test_clear_result_is_cautious_and_unknown_never_means_validated(self):
@@ -156,7 +170,7 @@ class AdvisoryTests(unittest.TestCase):
 
     def test_unreadable_candidate_and_host_ids_warn_of_rejection(self):
         for kind in ["identity", "host_identity"]:
-            answer = checks.advisory(model_result(problems=["blur"]), kind, date.today())
+            answer = checks.advisory(model_result(readability="poor", all_fields_legible=False, problems=["blur"]), kind, date.today())
             self.assertEqual(answer["status"], "warning")
             self.assertIn("sera rejetée", answer["critical"])
             if kind == "host_identity":
@@ -217,7 +231,7 @@ class AdvisoryTests(unittest.TestCase):
 
     def test_each_identity_page_is_analyzed_separately_and_worst_result_wins(self):
         for kind in ["identity", "host_identity"]:
-            with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(problems=["blur"])]) as provider:
+            with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(readability="poor", all_fields_legible=False, problems=["blur"])]) as provider:
                 answer = checks.analyze_images(["clear-page", "blurry-page"], kind, "test-key", date.today())
                 self.assertEqual(answer["status"], "warning")
                 self.assertEqual([call.args[0] for call in provider.call_args_list], [["clear-page"], ["blurry-page"]])
@@ -225,7 +239,7 @@ class AdvisoryTests(unittest.TestCase):
                 self.assertLessEqual(provider.call_args_list[0].kwargs["timeout"], 25)
             with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(confidence="low")]):
                 self.assertEqual(checks.analyze_images(["one", "two"], kind, "test-key", date.today())["status"], "unknown")
-        with patch.object(checks, "call_openai", return_value=model_result(problems=["blur"])) as provider:
+        with patch.object(checks, "call_openai", return_value=model_result(readability="poor", all_fields_legible=False, problems=["blur"])) as provider:
             self.assertEqual(checks.analyze_images(["bad", "second"], "identity", "test-key", date.today())["status"], "warning")
             self.assertEqual(provider.call_count, 1, "stop spending calls once the file needs replacement")
 
@@ -340,7 +354,7 @@ class EndpointTests(unittest.TestCase):
         self.provider.return_value = model_result(document_type="hosting_certificate", signature="absent", signature_confidence="high")
         self.assertEqual(self.submit("hosting_certificate").json["status"], "warning")
         self.assertEqual(self.provider.call_args.args[1], "hosting_certificate")
-        self.provider.return_value = model_result(problems=["blur"])
+        self.provider.return_value = model_result(readability="poor", all_fields_legible=False, problems=["blur"])
         self.assertIn("personne qui vous héberge", self.submit("host_identity").json["message"])
         calls = self.provider.call_count
         self.assertEqual(self.submit("identity_photo").status_code, 400)
