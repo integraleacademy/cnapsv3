@@ -294,7 +294,16 @@ def advisory(result, kind, today):
                 f"Bonne nouvelle ! La date repérée sur votre document est le {formatted} : il date de moins de 3 mois. "
                 "Vous pouvez conserver ce fichier. Notre équipe confirmera sa conformité lors du contrôle du dossier."}
     subject = "La pièce d’identité de la personne qui vous héberge" if kind == "host_identity" else "Votre pièce d’identité"
-    if result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"] or "fail" in result["identity_checks"].values():
+    # A mildly soft scan can still be unambiguously readable. Never use this
+    # exception for poor quality, uncertainty, glare, missing fields or cropping.
+    readable_soft_scan = (
+        result["readability"] in {"clear", "slightly_blurred"}
+        and result["confidence"] == "high" and result["all_fields_legible"]
+        and set(result["problems"]) <= {"blur"}
+        and result["identity_checks"]["sharp_text"] in {"pass", "fail"}
+        and all(value == "pass" for key, value in result["identity_checks"].items() if key != "sharp_text")
+    )
+    if not readable_soft_scan and (result["readability"] in {"slightly_blurred", "poor"} or result["problems"] or not result["all_fields_legible"] or "fail" in result["identity_checks"].values()):
         quality = result["identity_checks"]
         problems = result["problems"]
         reasons = []
@@ -314,10 +323,10 @@ def advisory(result, kind, today):
                 f"{subject} est à vérifier : " + "; ".join(reasons) + ". "
                 "Déposez de préférence une photo ou un scan plus net : toutes les informations, y compris les petits caractères, doivent être lisibles, sans reflet et sans bord coupé.",
                 "critical": "Si la pièce d’identité n’est pas parfaitement lisible, elle sera rejetée et votre dossier ne pourra pas être transmis au CNAPS avant son remplacement."}
-    if result["readability"] != "clear" or result["confidence"] != "high" or any(value != "pass" for value in result["identity_checks"].values()):
+    if not readable_soft_scan and (result["readability"] != "clear" or result["confidence"] != "high" or any(value != "pass" for value in result["identity_checks"].values())):
         return unavailable(kind)
     return {"status": "success", "title": "Fichier lisible", "message":
-            f"{subject} semble nette, entièrement visible et sans reflet gênant sur les pages fournies."}
+            f"Les informations de {subject.lower()} sont lisibles sur les pages fournies, sans zone utile coupée ni reflet gênant."}
 
 
 def render_photo(data):
