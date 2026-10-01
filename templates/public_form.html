@@ -213,19 +213,27 @@
     .section { padding:22px; border-color:#e5ebf3; border-radius:20px; background:#fff; box-shadow:0 14px 34px rgba(15,23,42,.04); }
     @media(max-width:640px) { body { padding:12px 0; } .wrap { padding:12px; } .section { padding:16px; } }
   </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='public-form-preparation.css', v='1') }}">
 </head>
 <body>
   <div class="wrap">
     <header class="header">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo Intégrale Academy">
-      <h1>Formulaire public CNAPS</h1>
-      <p class="subtitle">Déposez votre dossier en quelques minutes, avec vérification simplifiée.</p>
+      <div><h1>Votre demande CNAPS</h1>
+      <p class="subtitle">Intégrale Academy vous accompagne, étape par étape.</p></div>
     </header>
+    {% set fd = form_data if form_data is defined else {} %}
+    {% set show_form = form_data is defined or request.args.get('etape') == 'formulaire' %}
+    {% include '_public_form_preparation.html' %}
+    <div id="public-form-stage" {% if not show_form %}hidden{% endif %}>
+    <div class="prep-form-heading">
+      <a href="{{ url_for('public_form') }}#preparation-guide" data-prep-return>← Revoir le guide des documents</a>
+      <h2 id="public-form-title" tabindex="-1">Complétez votre demande</h2>
+    </div>
     {% with messages = get_flashed_messages(with_categories=true, category_filter=['public_error']) %}
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
     {% from "_document_upload_row.html" import document_row %}
-    {% set fd = form_data if form_data is defined else {} %}
     <form method="post" enctype="multipart/form-data" data-document-layout data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
       <div class="section">
         <div class="section-badge">👤 Étape 1</div>
@@ -296,6 +304,7 @@
         <button class="btn" type="submit">Envoyer ma demande</button>
       </div>
     </form>
+    </div>
   </div>
 
   <div id="file-alert-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="file-alert-title" aria-describedby="file-alert-message">
@@ -308,6 +317,7 @@
     </div>
   </div>
 
+  <script src="{{ url_for('static', filename='public-form-preparation.js', v='1') }}" defer></script>
   <script>
     const heberge=document.getElementById('heberge'), hb=document.getElementById('heberge_bloc');
     const nonFr=document.getElementById('non_francais'), nb=document.getElementById('non_francais_bloc');

@@ -1,0 +1,110 @@
+{% macro prep_icon(kind) -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {% if kind == 'home' %}<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>
+  {% elif kind == 'globe' %}<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>
+  {% elif kind == 'file' %}<path d="M14 3H5v18h14V8Z"/><path d="M14 3v5h5M8 12h8M8 16h6"/>
+  {% elif kind == 'eye' %}<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
+  {% elif kind == 'calendar' %}<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18m-13 5 3 3 5-5"/>
+  {% elif kind == 'frame' %}<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><rect x="7" y="7" width="10" height="10" rx="1"/>
+  {% elif kind == 'arrow' %}<path d="M4 12h16m-6-6 6 6-6 6"/>
+  {% else %}<path d="m5 12 4 4L19 6"/>{% endif %}
+</svg>
+{%- endmacro %}
+
+<section id="preparation-guide" class="prep-guide" aria-labelledby="prep-title" {% if show_form %}hidden{% endif %}>
+  <div class="prep-hero">
+    <div class="prep-hero-copy">
+      <span class="prep-eyebrow">LE PETIT GUIDE AVANT DE COMMENCER</span>
+      <h2 id="prep-title" tabindex="-1">Un dossier bien préparé,<br>c’est plus simple.</h2>
+      <p>Rassemblez vos documents sur votre téléphone ou votre ordinateur. On vous montre lesquels, et dans quel format.</p>
+      <a class="prep-hero-link" href="#prep-essentials">Je prépare mes documents <span aria-hidden="true">↓</span></a>
+    </div>
+    <ol class="prep-route" aria-label="Les étapes de votre demande">
+      <li class="prep-route-active"><span>01</span><div><strong>Je prépare</strong><small>Mes documents, au bon format</small></div></li>
+      <li><span>02</span><div><strong>Je complète</strong><small>Mes informations et mes pièces</small></div></li>
+      <li><span>03</span><div><strong>J’envoie</strong><small>Mon dossier à Intégrale Academy</small></div></li>
+    </ol>
+  </div>
+
+  <section id="prep-essentials" class="prep-essentials" aria-labelledby="prep-essentials-title">
+    <div class="prep-section-heading">
+      <div><span class="prep-eyebrow">01 / JE RASSEMBLE</span><h2 id="prep-essentials-title">Les 3 indispensables</h2><p>Cochez les pièces que vous avez déjà préparées.</p></div>
+      <div class="prep-progress" aria-live="polite" aria-atomic="true"><span data-prep-count>0 / 3</span><small>pièces préparées</small><progress data-prep-progress value="0" max="3" aria-label="Pièces préparées"></progress></div>
+    </div>
+    <div class="prep-cards">
+      <article class="prep-document" data-prep-card>
+        <div class="prep-image"><img src="{{ url_for('static', filename='illustrations/prepare-identity.webp') }}" alt="Un candidat prépare sa carte d’identité et son passeport sur son bureau." width="960" height="640" fetchpriority="high"><span class="prep-number">01</span></div>
+        <div class="prep-document-body">
+          <span class="prep-format">PDF <span>· 5 Mo max / fichier</span></span>
+          <h3>Votre pièce d’identité</h3>
+          <p><strong>Carte d’identité ou titre de séjour :</strong> le recto <strong>et</strong> le verso, dans un ou deux PDF.</p>
+          <p><strong>Ou votre passeport :</strong> la page d’identité avec votre photo.</p>
+          <div class="prep-tip">{{ prep_icon('frame') }}<span>Les bords et toutes les informations doivent être visibles.</span></div>
+          <label class="prep-ready"><input type="checkbox" data-prep-ready="identity"><span>Ma pièce d’identité est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label>
+        </div>
+      </article>
+      <article class="prep-document prep-document-photo" data-prep-card>
+        <div class="prep-image"><img src="{{ url_for('static', filename='illustrations/prepare-photo.webp') }}" alt="Une candidate fait réaliser une photo d’identité de face chez un photographe, sur fond bleu clair." width="960" height="640" decoding="async"><span class="prep-number">02</span></div>
+        <div class="prep-document-body">
+          <span class="prep-format">JPEG ou PNG <span>· 5 Mo max</span></span>
+          <h3>Votre photo d’identité</h3>
+          <p>Une <strong>photo officielle de moins de 6 mois</strong>, réalisée chez un photographe ou en cabine agréée.</p>
+          <p>De face, visage dégagé, sur fond uni <strong>gris clair ou bleu clair</strong>. Pas de fond blanc.</p>
+          <details class="prep-detail"><summary>Les bons réflexes pour la photo</summary><p>Tête nue et droite, yeux ouverts, bouche fermée, expression neutre. Pas d’ombre, de filtre ni de retouche. Avec des lunettes : yeux visibles, sans reflet ni verres teintés.</p><p><strong>Pas de selfie, de capture d’écran, ni de photo de votre carte d’identité.</strong> La photo se dépose en image, pas en PDF ou en HEIC.</p></details>
+          <label class="prep-ready"><input type="checkbox" data-prep-ready="identity_photo"><span>Ma photo officielle est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label>
+        </div>
+      </article>
+      <article class="prep-document prep-document-address" data-prep-card>
+        <div class="prep-image"><img src="{{ url_for('static', filename='illustrations/prepare-address.webp') }}" alt="Une candidate vérifie une facture à son domicile avant de la déposer." width="960" height="640" decoding="async"><span class="prep-number">03</span></div>
+        <div class="prep-document-body">
+          <span class="prep-format">PDF <span>· 5 Mo max</span></span>
+          <h3>Votre justificatif de domicile</h3>
+          <p>Un document de <strong>moins de 3 mois</strong>. <span data-prep-address-owner>À votre nom et à votre adresse.</span></p>
+          <p>Facture d’eau, de gaz, d’électricité, de téléphone fixe seul ou quittance de loyer.</p>
+          <div class="prep-caution"><span aria-hidden="true">!</span><span><strong>Pas de facture mobile ni Internet</strong>, même une box avec téléphone fixe.</span></div>
+          <label class="prep-ready"><input type="checkbox" data-prep-ready="proof_address"><span>Mon justificatif est prêt</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="prep-situation" aria-labelledby="prep-situation-title">
+    <div class="prep-section-heading"><div><span class="prep-eyebrow">LE PETIT PLUS SELON VOTRE SITUATION</span><h2 id="prep-situation-title">Et pour vous, faut-il autre chose ?</h2><p>Sélectionnez votre situation pour afficher les pièces à ajouter.</p></div></div>
+    <div class="prep-profile-options">
+      <label class="prep-profile"><input type="checkbox" id="prep-heberge" data-prep-profile="heberge" aria-controls="prep-host" {% if fd.get('heberge') == 'on' %}checked{% endif %}>{{ prep_icon('home') }}<span><strong>Je suis hébergé(e)</strong><small>Mon justificatif est au nom d’une autre personne.</small></span></label>
+      <label class="prep-profile"><input type="checkbox" id="prep-non-francais" data-prep-profile="non_francais" aria-controls="prep-foreign" {% if fd.get('non_francais') == 'on' %}checked{% endif %}>{{ prep_icon('globe') }}<span><strong>Je n’ai pas la nationalité française</strong><small>Des pièces complémentaires sont demandées.</small></span></label>
+    </div>
+    <div id="prep-host" class="prep-extra" data-prep-extra="heberge">
+      <h3>Si vous êtes hébergé(e) : 2 pièces en plus</h3>
+      <p class="prep-extra-intro">Le justificatif de domicile doit être au nom de votre hébergeant, à l’adresse où vous résidez.</p>
+      <div class="prep-extra-grid">
+        <article data-prep-card><span class="prep-format">PDF · 5 Mo max / fichier</span><h4>La pièce d’identité de l’hébergeant</h4><p>Carte d’identité ou titre de séjour : recto et verso, dans un ou deux PDF. Ou passeport : page d’identité avec photo.</p><label class="prep-ready"><input type="checkbox" data-prep-ready="host_identity"><span>La pièce d’identité est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
+        <article data-prep-card><span class="prep-format">PDF · 5 Mo max</span><h4>L’attestation d’hébergement signée</h4><p>Une attestation complétée et signée par la personne qui vous héberge.</p><a class="prep-text-link" href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank" rel="noopener">Utiliser le modèle Service Public <span aria-hidden="true">↗</span></a><label class="prep-ready"><input type="checkbox" data-prep-ready="hosting_certificate"><span>L’attestation signée est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
+      </div>
+    </div>
+    <div id="prep-foreign" class="prep-extra" data-prep-extra="non_francais">
+      <h3>Si vous n’avez pas la nationalité française : 2 pièces en plus</h3>
+      <div class="prep-extra-grid">
+        <article data-prep-card><span class="prep-format">PDF · 5 Mo max</span><h4>Le casier judiciaire du pays de naissance</h4><p>Daté de <strong>moins de 3 mois</strong> et traduit en français.</p><label class="prep-ready"><input type="checkbox" data-prep-ready="criminal_record"><span>Mon casier judiciaire est prêt</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
+        <article data-prep-card><span class="prep-format">PDF · 5 Mo max</span><h4>Le diplôme français ou le test TCF officiel</h4><p>Un <strong>diplôme français supérieur au brevet</strong> ou un <strong>test TCF officiel de moins de 2 ans</strong>.</p><label class="prep-ready"><input type="checkbox" data-prep-ready="french_diploma_tcf"><span>Mon diplôme ou mon test est prêt</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="prep-quality" aria-labelledby="prep-quality-title">
+    <div class="prep-quality-header"><div><span class="prep-eyebrow">02 / LE DERNIER COUP D’ŒIL</span><h2 id="prep-quality-title">Le bon fichier, du premier coup.</h2></div><span class="prep-size"><strong>5 Mo</strong> maximum par fichier</span></div>
+    <div class="prep-quality-grid">
+      <div>{{ prep_icon('file') }}<h3>Le bon format</h3><p><strong>PDF</strong> pour les documents.<br><strong>JPEG / PNG</strong> pour la photo.</p></div>
+      <div>{{ prep_icon('frame') }}<h3>Le document entier</h3><p>Les 4 bords visibles. Toutes les pages utiles, sans coin coupé.</p></div>
+      <div>{{ prep_icon('eye') }}<h3>Net et lisible</h3><p>Pas de flou ni de reflet. Vérifiez que le texte se lit en zoomant.</p></div>
+      <div>{{ prep_icon('calendar') }}<h3>Les bonnes dates</h3><p>Domicile : <strong>moins de 3 mois.</strong><br>Photo : <strong>moins de 6 mois.</strong></p></div>
+    </div>
+    <details class="prep-convert"><summary>Mes documents sont sur papier ou en photo : comment créer un PDF ?</summary><p>Utilisez un scanner ou la fonction « Scanner un document » de votre téléphone. Cadrez toute la page, vérifiez la netteté puis enregistrez en PDF. Pour une carte d’identité, scannez les deux faces : un PDF de deux pages ou deux PDF séparés conviennent.</p><p><strong>La photo d’identité fait exception :</strong> conservez le fichier officiel en JPEG ou PNG. Renommer simplement un fichier « .pdf » ne le convertit pas.</p></details>
+  </section>
+
+  <div class="prep-start">
+    <div><span class="prep-eyebrow">03 / À VOUS DE JOUER</span><h2 data-prep-finish-title>Vos documents sont prêts ?</h2><p>Vous pourrez revoir ce guide pendant la saisie.</p><small>La checklist vous aide à vous organiser ; elle ne valide pas les documents.</small></div>
+    <a class="prep-start-button" href="{{ url_for('public_form', etape='formulaire') }}#public-form-title" data-prep-start>J’ai mes documents, je commence {{ prep_icon('arrow') }}</a>
+  </div>
+  <noscript><style>.prep-profile-options,.prep-ready,.prep-progress{display:none!important}</style><p class="prep-noscript">Consultez les pièces correspondant à votre situation, puis cliquez sur « J’ai mes documents, je commence ».</p></noscript>
+</section>
