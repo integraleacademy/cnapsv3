@@ -12,7 +12,11 @@ export function documentCheckModal(root) {
   const close = () => {
     if (!dialog?.open) return;
     dialog.close();
-    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    if (returnFocus?.isConnected) {
+      const row = returnFocus.closest('[data-document-row]');
+      const target = row && !row.open ? row.querySelector('summary') : returnFocus;
+      target?.focus({ preventScroll: true });
+    }
   };
   const dismiss = () => { dismissed = true; close(); };
   dialog?.querySelectorAll('[data-analysis-dismiss]').forEach(button => button.addEventListener('click', dismiss));

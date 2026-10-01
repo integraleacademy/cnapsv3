@@ -3,6 +3,7 @@
 export function setDocumentRowResult(input, result) {
   const row = input.closest('[data-document-row]');
   if (!row) return;
+  const previousStatus = row.dataset.documentState;
   const hasFiles = Boolean(input.files?.length);
   const status = hasFiles ? result?.status || 'selected' : 'empty';
   const label = status === 'empty' ? 'À déposer' : status === 'pending' ? 'Vérification…' :
@@ -18,6 +19,12 @@ export function setDocumentRowResult(input, result) {
   if (add) {
     add.hidden = !hasFiles || status === 'success';
     add.textContent = result?.missing ? `Ajouter le ${result.missing}` : 'Ajouter un fichier';
+  }
+  // Close only on a new successful result, so a verified row can be reopened.
+  if (status === 'success' && previousStatus !== 'success' && row.open) {
+    const restoreFocus = row.contains(input.ownerDocument.activeElement);
+    row.open = false;
+    if (restoreFocus) row.querySelector('summary').focus({ preventScroll: true });
   }
 }
 
