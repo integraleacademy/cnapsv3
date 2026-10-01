@@ -1,5 +1,5 @@
 import { analyzeDocument } from './document-analysis.mjs';
-import { fileKey } from './document-check-rules.mjs';
+import { fileKey, unavailableMessage } from './document-check-rules.mjs';
 
 function button(label, action, secondary = false) {
   const element = document.createElement('button');
@@ -82,20 +82,20 @@ export function attachDocumentChecks(root = document, analyze = analyzeDocument)
         const card = cardFor(input, file);
         output.append(card.element);
         if (kind === 'hosting_certificate') {
-          card.result({ status: 'reminder', message: "Avez-vous vérifié que l'attestation d'hébergement est bien signée par la personne qui vous héberge ? Une attestation non signée devra être remplacée." });
+          card.result({ status: 'reminder', message: "Avez-vous vérifié que l'attestation d'hébergement est bien signée par la personne qui vous héberge ?" });
           continue;
         }
         if (cache.has(file)) { card.result(cache.get(file)); continue; }
         card.pending(kind);
         // No submit handler, required field or custom validity is added here.
-        // Even an unavailable OCR engine must leave the form usable.
-        Promise.resolve().then(() => analyze(file, kind, today, { signal })).then(result => {
+        // Even an unavailable analysis service must leave the form usable.
+        Promise.resolve().then(() => analyze(file, kind, today, { signal, token: input.form?.dataset.checkToken })).then(result => {
           if (current !== revision || signal.aborted) return;
           cache.set(file, result);
           card.result(result);
         }).catch(() => {
           if (current !== revision || signal.aborted) return;
-          card.result({ status: 'unknown', message: "La vérification automatique n'a pas pu aboutir. Vérifiez le document vous-même ; vous pouvez conserver ce fichier et poursuivre." });
+          card.result({ status: 'unknown', message: unavailableMessage(kind) });
         });
       }
     });

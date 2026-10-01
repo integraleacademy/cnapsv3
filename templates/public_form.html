@@ -216,7 +216,7 @@
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
     {% set fd = form_data if form_data is defined else {} %}
-    <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}">
+    <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}" data-check-token="{{ document_analysis_token() }}">
       <div class="section">
         <div class="section-badge">👤 Étape 1</div>
         <h2>Informations personnelles</h2>
@@ -239,6 +239,7 @@
           <label for="identity_photo">Déposer ma photo d'identité</label>
           <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-identity-photo required>
         </section>
+        <p class="hint">Les pièces d'identité et justificatifs de domicile sélectionnés sont transmis à OpenAI pour une vérification indicative. Vous pouvez poursuivre quelle que soit l'alerte ; notre équipe effectuera le contrôle final.</p>
         <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
         <input type="file" name="identity" accept="application/pdf,.pdf" data-document-check="identity" multiple required>
         <div class="upload-status" data-upload-status="identity"></div>
@@ -256,7 +257,6 @@
           <input type="file" name="host_identity" accept="application/pdf,.pdf" data-document-check="host_identity" multiple>
           <div class="upload-status" data-upload-status="host_identity"></div>
           <label>Attestation d'hébergement signée</label>
-          <p class="hosting-signature-reminder">⚠️ Avez-vous vérifié que l'attestation d'hébergement est bien signée par la personne qui vous héberge ?</p>
           <p class="hint">Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank">service-public.gouv.fr</a></p>
           <input type="file" name="hosting_certificate" accept="application/pdf,.pdf" data-document-check="hosting_certificate">
           <div class="upload-status" data-upload-status="hosting_certificate"></div>
@@ -411,6 +411,6 @@
     heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
   </script>
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
-  <script type="module" src="{{ url_for('static', filename='document-checks.mjs') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs', v='openai-1') }}"></script>
 </body>
 </html>
