@@ -13,9 +13,10 @@ export function setDocumentRowResult(input, result) {
   row.classList.toggle('valid', ['success', 'selected'].includes(status));
   row.classList.toggle('pending', ['pending', 'warning', 'unknown', 'info'].includes(status));
   row.querySelector('[data-document-status]').textContent = label;
+  row.querySelector('.upload-label').hidden = hasFiles;
   const add = row.querySelector('[data-add-document]');
   if (add) {
-    add.hidden = !hasFiles;
+    add.hidden = !hasFiles || status === 'success';
     add.textContent = result?.missing ? `Ajouter le ${result.missing}` : 'Ajouter un fichier';
   }
 }
