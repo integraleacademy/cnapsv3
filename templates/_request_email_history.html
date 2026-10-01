@@ -1,0 +1,32 @@
+<section class="mail-history" id="historique-mails" aria-labelledby="mail-history-title">
+  <div class="mail-history-heading">
+    <span class="mail-history-icon" aria-hidden="true">✉</span>
+    <div><h2 id="mail-history-title">Historique des mails</h2><p>Retrouvez les échanges envoyés pour ce dossier.</p></div>
+    <span class="mail-history-count">{{ email_history|length }}</span>
+  </div>
+  {% if email_history %}
+    <div class="mail-history-list">
+      {% for email in email_history %}
+        <details class="mail-entry">
+          <summary>
+            <span class="mail-entry-marker" aria-hidden="true">{{ '✓' if email.has_content else '◷' }}</span>
+            <span class="mail-entry-heading"><strong>{{ email.subject }}</strong><span>{{ email.sent_label }}{% if email.recipient %} · {{ email.recipient }}{% endif %}</span></span>
+            <span class="mail-entry-tag {{ 'archived' if email.has_content else 'legacy' }}">{{ 'Voir le mail' if email.has_content else 'Ancienne trace' }}</span>
+            <span class="mail-entry-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          {% if email.has_content %}
+            <div class="mail-entry-content">
+              <p class="mail-entry-address"><strong>De :</strong> {{ email.sender }}<br><strong>À :</strong> {{ email.recipient }}</p>
+              <iframe title="Mail : {{ email.subject }}" sandbox referrerpolicy="no-referrer" loading="lazy" data-mail-src="{{ url_for('view_request_email', request_id=req.id, email_id=email.id) }}"></iframe>
+              <p class="mail-entry-footnote">Copie du mail envoyé. Les liens sont désactivés dans cet aperçu.</p>
+            </div>
+          {% else %}
+            <p class="mail-history-empty">Une trace de cet envoi a été conservée, mais le contenu exact du mail et l’adresse du destinataire n’étaient pas archivés à cette date.</p>
+          {% endif %}
+        </details>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="mail-history-empty">Aucun mail archivé ni ancienne trace d’envoi disponible pour ce dossier. Les prochains mails envoyés apparaîtront ici avec leur contenu.</p>
+  {% endif %}
+</section>

@@ -24,6 +24,7 @@ import logging
 import warnings
 from PIL import Image, UnidentifiedImageError
 from document_analysis import register_document_analysis, submitted_analysis, admin_analysis, record_identity_group_alerts
+from email_history import init_email_history, archive_sent_email, register_email_history, email_preview
 
 
 
@@ -92,6 +93,7 @@ MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
 app.jinja_env.globals["document_check_today"] = lambda: datetime.now(FRANCE_TZ).date().isoformat()
 register_document_analysis(app, lambda: DB_NAME)
+register_email_history(app, lambda: DB_NAME)
 
 
 MONTHS_FR = {
@@ -366,6 +368,7 @@ def init_db():
                 FOREIGN KEY (request_id) REFERENCES public_requests(id) ON DELETE CASCADE
             )
         """)
+        init_email_history(conn)
 
         conn.execute(
             """
@@ -991,7 +994,7 @@ def update_statut_cnaps(id):
             conn.row_factory = sqlite3.Row
             dossier = conn.execute(
                 """
-                SELECT d.*, pr.email AS request_email, pr.date_naissance
+                SELECT d.*, pr.email AS request_email, pr.id AS public_request_id, pr.date_naissance
                      , pr.dracar_password AS request_dracar_password
                 FROM dossiers d
                 LEFT JOIN public_requests pr ON pr.dossier_id = d.id
@@ -1017,7 +1020,7 @@ def update_statut_cnaps(id):
                     password=(dossier["request_dracar_password"] or "").strip() or _dracar_password(dossier["nom"], dossier["date_naissance"]),
                     dracar_app_url=DRACAR_APP_URL,
                 )
-                _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
+                _send_email_html(email, "Votre dossier CNAPS a été transmis", html, request_id=dossier["public_request_id"], email_kind="transmitted")
         return ("", 204)   # aucun rechargement de page
 
     # --- Mode ancien formulaire (fallback) ---
@@ -1026,7 +1029,7 @@ def update_statut_cnaps(id):
         conn.row_factory = sqlite3.Row
         dossier = conn.execute(
             """
-            SELECT d.*, pr.email AS request_email, pr.date_naissance
+            SELECT d.*, pr.email AS request_email, pr.id AS public_request_id, pr.date_naissance
                  , pr.dracar_password AS request_dracar_password
             FROM dossiers d
             LEFT JOIN public_requests pr ON pr.dossier_id = d.id
@@ -1052,7 +1055,7 @@ def update_statut_cnaps(id):
                 password=(dossier["request_dracar_password"] or "").strip() or _dracar_password(dossier["nom"], dossier["date_naissance"]),
                 dracar_app_url=DRACAR_APP_URL,
             )
-            _send_email_html(email, "Votre dossier CNAPS a été transmis", html)
+            _send_email_html(email, "Votre dossier CNAPS a été transmis", html, request_id=dossier["public_request_id"], email_kind="transmitted")
     return redirect("/")
 
 
@@ -1956,7 +1959,14 @@ CHECKLIST_LABELS = [
 ]
 
 
-def _send_email_html(to_email: str, subject: str, html: str):
+def _send_email_html(to_email: str, subject: str, html: str, *, request_id=None, email_kind="other"):
+    provider = _deliver_email_html(to_email, subject, html)
+    if provider:
+        sender = SMTP_FROM if provider == 'smtp' else BREVO_SENDER_EMAIL
+        archive_sent_email(DB_NAME, request_id, email_kind, to_email, sender, subject, html, provider)
+
+
+def _deliver_email_html(to_email: str, subject: str, html: str):
     text_content = "Votre client mail ne supporte pas le HTML."
 
     if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
@@ -1970,8 +1980,10 @@ def _send_email_html(to_email: str, subject: str, html: str):
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
-        return
+            refused = server.send_message(msg)
+            if refused:
+                raise RuntimeError("Le serveur email a refusé le destinataire")
+        return 'smtp'
 
     if BREVO_API_KEY and BREVO_SENDER_EMAIL:
         payload = json.dumps(
@@ -2005,10 +2017,9 @@ def _send_email_html(to_email: str, subject: str, html: str):
             ) from exc
         except URLError as exc:
             raise RuntimeError(f"Brevo email request failed: {exc.reason}") from exc
-        return
+        return 'brevo'
 
-    print(f"[EMAIL MOCK] to={to_email} subject={subject}")
-    print(html)
+    app.logger.warning("email_not_sent reason=provider_not_configured")
 
 
 def _send_sms(to_phone: str, message: str):
@@ -2229,7 +2240,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                     logo_url=url_for("static", filename="logo.png", _external=True),
                     dracar_url=url_for("static", filename="dracar.png", _external=True),
                 )
-                _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
+                _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html, request_id=req["id"], email_kind="reminder_4h")
             _send_sms(
                 req.get("telephone"),
                 _cnaps_sms_message(req, expiration_label),
@@ -2247,7 +2258,7 @@ def _send_cnaps_reminders(conn, requests_rows):
                     logo_url=url_for("static", filename="logo.png", _external=True),
                     dracar_url=url_for("static", filename="dracar.png", _external=True),
                 )
-                _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
+                _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html, request_id=req["id"], email_kind="reminder_2h")
             _send_sms(
                 req.get("telephone"),
                 _cnaps_sms_message(req, expiration_label, urgent=True),
@@ -2276,7 +2287,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
                 logo_url=url_for("static", filename="logo.png", _external=True),
                 dracar_url=url_for("static", filename="dracar.png", _external=True),
             )
-            _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html)
+            _send_email_html(recipient_email, "⚠️ Validation CNAPS à faire avant expiration", html, request_id=req["id"], email_kind="reminder_4h")
 
         _send_sms(
             req.get("telephone"),
@@ -2294,7 +2305,7 @@ def _send_cnaps_manual_reminder(conn, req, reminder_kind: str):
                 logo_url=url_for("static", filename="logo.png", _external=True),
                 dracar_url=url_for("static", filename="dracar.png", _external=True),
             )
-            _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html)
+            _send_email_html(recipient_email, "🚨 URGENT – Validation CNAPS avant expiration", html, request_id=req["id"], email_kind="reminder_2h")
 
         _send_sms(
             req.get("telephone"),
@@ -2529,7 +2540,7 @@ def public_form():
     _send_email_html(
         email,
         "Confirmation de dépôt dossier CNAPS",
-        email_html,
+        email_html, request_id=request_id, email_kind="deposit_confirmation",
     )
 
     return render_template("public_form_success.html", prenom=prenom)
@@ -2658,7 +2669,7 @@ def update_espace_cnaps(request_id):
         recipient_email = (req["email"] or "").strip()
         if recipient_email:
             try:
-                _send_email_html(recipient_email, "⚠️ Formation sécurité Validation de votre compte CNAPS", html)
+                _send_email_html(recipient_email, "⚠️ Formation sécurité Validation de votre compte CNAPS", html, request_id=request_id, email_kind="account_created")
             except Exception:
                 app.logger.exception(
                     "Échec envoi email espace CNAPS request_id=%s email=%r",
@@ -2832,6 +2843,7 @@ def delete_a_traiter_line(request_id):
             return redirect(url_for("a_traiter"))
 
         conn.execute("DELETE FROM request_documents WHERE request_id = ?", (request_id,))
+        conn.execute("DELETE FROM request_email_history WHERE request_id = ?", (request_id,))
         conn.execute(
             "DELETE FROM request_non_conformity_notifications WHERE request_id = ?",
             (request_id,),
@@ -2864,6 +2876,15 @@ def request_documents(request_id):
             (request_id,),
         ).fetchall()
 
+        email_history = [dict(row) for row in conn.execute(
+            "SELECT id, subject, recipient, sender, sent_at, legacy_key, html_body IS NOT NULL AS has_content FROM request_email_history WHERE request_id = ? ORDER BY sent_at DESC, id DESC",
+            (request_id,),
+        ).fetchall()]
+
+    for email in email_history:
+        sent = _parse_db_datetime(email['sent_at'])
+        email['sent_label'] = sent.strftime('%d/%m/%Y à %H:%M') if sent else email['sent_at']
+
     grouped = {}
     for d in docs:
         document = dict(d)
@@ -2890,7 +2911,23 @@ def request_documents(request_id):
         doc_labels=DOC_LABELS,
         missing_doc_type_options=missing_doc_type_options,
         missing_doc_types=missing_doc_types,
+        email_history=email_history,
     )
+
+
+@app.route("/a-traiter/<int:request_id>/emails/<int:email_id>")
+@login_required
+def view_request_email(request_id, email_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        row = conn.execute("SELECT html_body FROM request_email_history WHERE request_id=? AND id=?", (request_id, email_id)).fetchone()
+    if not row or row[0] is None:
+        abort(404)
+    response = make_response(email_preview(row[0]))
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @app.route("/uploads/<int:request_id>/<path:filename>")
@@ -3198,7 +3235,7 @@ def notify_non_conformities(request_id):
         )
 
         try:
-            _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html)
+            _send_email_html(req["email"], "Documents non conformes - dossier CNAPS", html, request_id=request_id, email_kind="non_conformity")
         except RuntimeError:
             app.logger.exception("Échec envoi email non-conformités request_id=%s", request_id)
             flash(

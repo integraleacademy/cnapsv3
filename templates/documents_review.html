@@ -8,6 +8,7 @@
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='admin-document-analysis.css', v='1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='email-history.css', v='1') }}">
   <style>
     :root {
       --bg: #f3f4f6;
@@ -481,6 +482,7 @@
     </section>
     <p class="subtitle">Sélectionnez un statut clair pour chaque document puis notifiez les non-conformités.</p>
     <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
+    {% include '_request_email_history.html' %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -680,5 +682,6 @@
     });
   </script>
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='email-history.mjs', v='1') }}"></script>
 </body>
 </html>

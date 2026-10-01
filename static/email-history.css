@@ -1,0 +1,24 @@
+.mail-history{margin:24px 0;border:1px solid #dbe4f0;border-radius:16px;background:#fff;overflow:hidden}
+.mail-history-heading{display:flex;align-items:center;gap:12px;padding:18px;background:linear-gradient(110deg,#eff6ff,#f8fafc)}
+.mail-history-icon{display:grid;place-items:center;background:#dbeafe;color:#1d4ed8;border-radius:12px;width:44px;height:44px;flex-shrink:0;font-size:24px}
+.mail-history-heading h2{font-size:18px;margin:0 0 3px;letter-spacing:-.2px}
+.mail-history-heading p{margin:0;color:#64748b;font-size:12px}
+.mail-history-count{margin-left:auto;background:#fff;color:#1d4ed8;border:1px solid #dbeafe;font-size:13px;font-weight:700;min-width:30px;border-radius:20px;padding:5px 10px;text-align:center}
+.mail-entry{border-top:1px solid #e2e8f0}
+.mail-entry summary{display:flex;align-items:center;gap:11px;cursor:pointer;list-style:none;padding:16px 18px;transition:background .15s}
+.mail-entry summary::-webkit-details-marker{display:none}
+.mail-entry summary:hover,.mail-entry[open]>summary{background:#f8fafc}
+.mail-entry summary:focus-visible{outline:2px solid #2563eb;outline-offset:-3px}
+.mail-entry-marker{display:grid;place-items:center;background:#eef2ff;color:#4f46e5;width:27px;height:27px;border-radius:50%;flex-shrink:0}
+.mail-entry-heading{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.mail-entry-heading strong{font-size:13px;overflow-wrap:anywhere}
+.mail-entry-heading>span{font-size:11px;color:#64748b;overflow-wrap:anywhere}
+.mail-entry-tag{font-size:10px;font-weight:700;padding:5px 8px;border-radius:6px;white-space:nowrap}
+.mail-entry-tag.archived{color:#166534;background:#ecfdf5}
+.mail-entry-tag.legacy{color:#64748b;background:#f1f5f9}
+.mail-entry-chevron{color:#64748b;transition:transform .15s}.mail-entry[open] .mail-entry-chevron{transform:rotate(180deg)}
+.mail-entry-content{padding:0 18px 16px}.mail-entry-address{font-size:12px;color:#475569;line-height:1.7;margin:8px 0 14px;overflow-wrap:anywhere}
+.mail-entry iframe{display:block;width:100%;height:560px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+.mail-entry-footnote{font-size:11px;color:#64748b;margin:9px 0 0}
+.mail-history-empty{font-size:13px;color:#64748b;margin:0;padding:18px;line-height:1.65}
+@media(max-width:600px){.mail-entry summary{padding:14px 12px;gap:8px}.mail-entry-tag{display:none}.mail-entry-content{padding:0 10px 12px}.mail-entry iframe{height:500px}.mail-history-heading{padding:14px}}
