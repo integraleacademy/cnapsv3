@@ -6,6 +6,7 @@
   <title>Dépôt dossier CNAPS</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -215,7 +216,7 @@
       {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
     {% endwith %}
     {% set fd = form_data if form_data is defined else {} %}
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}">
       <div class="section">
         <div class="section-badge">👤 Étape 1</div>
         <h2>Informations personnelles</h2>
@@ -239,11 +240,11 @@
           <input type="file" id="identity_photo" name="identity_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-identity-photo required>
         </section>
         <label>Carte d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
-        <input type="file" name="identity" accept="application/pdf,.pdf" multiple required>
+        <input type="file" name="identity" accept="application/pdf,.pdf" data-document-check="identity" multiple required>
         <div class="upload-status" data-upload-status="identity"></div>
         <label>Justificatif de domicile de moins de 3 mois</label>
         <p class="hint">Uniquement facture gaz/électricité/eau ou quittance de loyer (pas téléphone).</p>
-        <input type="file" name="proof_address" accept="application/pdf,.pdf" required>
+        <input type="file" name="proof_address" accept="application/pdf,.pdf" data-document-check="proof_address" required>
         <div class="upload-status" data-upload-status="proof_address"></div>
       </div>
       <div class="section">
@@ -252,11 +253,12 @@
         <div class="inline"><input type="checkbox" id="heberge" name="heberge" style="width:auto" {% if fd.get('heberge') == 'on' %}checked{% endif %}><label for="heberge">Cochez la case si vous êtes hébergé(e)</label></div>
         <div id="heberge_bloc" class="hidden">
           <label>HEBERGEANT - Pièce d'identité RECTO VERSO ou Passeport ou Titre de séjour</label>
-          <input type="file" name="host_identity" accept="application/pdf,.pdf" multiple>
+          <input type="file" name="host_identity" accept="application/pdf,.pdf" data-document-check="host_identity" multiple>
           <div class="upload-status" data-upload-status="host_identity"></div>
           <label>Attestation d'hébergement signée</label>
+          <p class="hosting-signature-reminder">⚠️ Avez-vous vérifié que l'attestation d'hébergement est bien signée par la personne qui vous héberge ?</p>
           <p class="hint">Modèle : <a href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank">service-public.gouv.fr</a></p>
-          <input type="file" name="hosting_certificate" accept="application/pdf,.pdf">
+          <input type="file" name="hosting_certificate" accept="application/pdf,.pdf" data-document-check="hosting_certificate">
           <div class="upload-status" data-upload-status="hosting_certificate"></div>
         </div>
         <div class="inline"><input type="checkbox" id="non_francais" name="non_francais" style="width:auto" {% if fd.get('non_francais') == 'on' %}checked{% endif %}><label for="non_francais">Cochez la case si vous n'avez pas la nationalité française</label></div>
@@ -368,7 +370,10 @@
         return;
       }
       const label = files.length === 1 ? '1 fichier déposé' : `${files.length} fichiers déposés`;
-      status.innerHTML = `${label}<ul>${files.map(file => `<li>${file.name}</li>`).join('')}</ul>`;
+      status.replaceChildren(document.createTextNode(label));
+      const list = document.createElement('ul');
+      files.forEach(file => { const item = document.createElement('li'); item.textContent = file.name; list.append(item); });
+      status.append(list);
     }
 
     document.querySelectorAll('input[type="file"]:not([data-identity-photo])').forEach(function(input) {
@@ -383,7 +388,10 @@
         }
 
         if (input.multiple) {
-          const existingFiles = selectedFilesByInput.get(input.name) || [];
+          let existingFiles = selectedFilesByInput.get(input.name) || [];
+          if (input.dataset.replaceFileKey && files.length) {
+            existingFiles = existingFiles.filter(file => fileKey(file) !== input.dataset.replaceFileKey);
+          }
           files = mergeFiles(existingFiles, files).filter(file => file.size <= 5 * 1024 * 1024);
           selectedFilesByInput.set(input.name, files);
           assignFilesToInput(input, files);
@@ -391,6 +399,7 @@
           assignFilesToInput(input, files);
         }
 
+        delete input.dataset.replaceFileKey;
         updateUploadStatus(input);
       });
     });
@@ -402,5 +411,6 @@
     heberge.addEventListener('change',sync); nonFr.addEventListener('change',sync); sync();
   </script>
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs') }}"></script>
 </body>
 </html>
