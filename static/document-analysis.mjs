@@ -4,7 +4,7 @@ import { assessAddressDate, assessIdentityReadability, findIssueDates } from './
 // bytes and recognised text stay in the browser until the usual form submission.
 const PDF_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289';
 const OCR_BASE = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0';
-const OCR_CORE = 'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.1.2';
+const OCR_CORE = 'https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0';
 const OCR_LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0_best_int';
 let librariesPromise;
 let queue = Promise.resolve();
