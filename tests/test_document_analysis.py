@@ -287,9 +287,28 @@ class AdvisoryTests(unittest.TestCase):
         self.assertIs(payload["store"], False)
         self.assertTrue(payload["text"]["format"]["strict"])
         self.assertEqual(payload["input"][0]["content"][1]["type"], "input_image")
-        self.assertEqual(payload["input"][0]["content"][1]["detail"], "high")
+        self.assertEqual(payload["model"], "gpt-5.4")
+        self.assertEqual(payload["reasoning"], {"effort": "none"})
+        self.assertEqual(payload["input"][0]["content"][1]["detail"], "original")
         self.assertEqual(len([part for part in payload["input"][0]["content"] if part["type"] == "input_image"]), 5)
         self.assertEqual(call.call_args.kwargs["timeout"], 25)
+
+    def test_model_selection_preserves_other_documents_and_identity_override(self):
+        response = {"status": "completed", "output": [{"type": "message", "content": [
+            {"type": "output_text", "text": json.dumps(model_result())}]}]}
+        for kind, overrides, expected in [
+            ("proof_address", {}, "gpt-4.1"),
+            ("host_identity", {}, "gpt-5.4"),
+            ("identity", {"OPENAI_IDENTITY_MODEL": "gpt-4.1"}, "gpt-4.1"),
+            ("proof_address", {"OPENAI_DOCUMENT_MODEL": "custom-model"}, "custom-model"),
+        ]:
+            with self.subTest(kind=kind, model=expected), patch.dict(os.environ, overrides, clear=True), \
+                    patch.object(checks, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())) as call:
+                checks.call_openai(checks.render_pages(blank_pdf()), kind, "test-key-not-real")
+                payload = json.loads(call.call_args.args[0].data)
+                self.assertEqual(payload["model"], expected)
+                self.assertEqual(payload["input"][0]["content"][1]["detail"], "original" if expected == "gpt-5.4" else "high")
+                self.assertEqual("reasoning" in payload, expected == "gpt-5.4")
 
     def test_provider_refusal_and_incomplete_response_are_not_successes(self):
         for response in [{"status": "incomplete"}, {"status": "completed", "output": [

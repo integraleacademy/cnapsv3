@@ -426,21 +426,28 @@ def identity_views(encoded):
 
 
 def call_openai(images, kind, api_key, timeout=25):
-    if kind in {"identity", "host_identity"}:
+    identity = kind in {"identity", "host_identity"}
+    model = os.getenv("OPENAI_DOCUMENT_MODEL", "").strip() or "gpt-4.1"
+    if identity:
+        model = os.getenv("OPENAI_IDENTITY_MODEL", "").strip() or "gpt-5.4"
         if len(images) != 1:
             raise ValueError("identity_requires_one_page")
         images = identity_views(images[0])
+    # Preserve small administrative characters instead of downsampling scans.
+    original_detail = model == "gpt-5.4" or model.startswith("gpt-5.4-2026-")
     payload = {
-        "model": os.getenv("OPENAI_DOCUMENT_MODEL", "gpt-4.1").strip() or "gpt-4.1",
+        "model": model,
         "store": False,
         "instructions": INSTRUCTIONS,
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": "Document à vérifier : " + KIND_LABELS[kind]},
-            *[{"type": "input_image", "image_url": "data:image/jpeg;base64," + image, "detail": "high"} for image in images],
+            *[{"type": "input_image", "image_url": "data:image/jpeg;base64," + image, "detail": "original" if original_detail else "high"} for image in images],
         ]}],
         "text": {"format": {"type": "json_schema", "name": "document_visual_check", "strict": True, "schema": SCHEMA}},
         "max_output_tokens": 1600,
     }
+    if original_detail:
+        payload["reasoning"] = {"effort": "none"}
     req = Request("https://api.openai.com/v1/responses", data=json.dumps(payload).encode("utf-8"),
                   headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}, method="POST")
     # No retries: an outage must not multiply charges or keep the form waiting.
