@@ -112,28 +112,44 @@ S'il existe plusieurs dates de document contradictoires ou si la date est incert
 date_kind uncertain et date_confidence low. Une date nettement imprimée peut être high même si
 le reste de la photographie est légèrement flou. Pour une identité, document_date doit être null.
 
-PIÈCE D'IDENTITÉ : juge la netteté réelle de l'image, pas ta capacité à deviner quelques mots.
-Vérifie les petites lignes, chiffres, dates, bords des caractères, reflets, contrastes et cadrage.
-Quelques gros mots lisibles ou une zone MRZ lisible ne suffisent pas. Tu ne dois pas reconstituer
-des caractères en t'appuyant sur le contexte, la mise en page connue ou une reconnaissance partielle.
-Si les lettres/chiffres ont des contours flous, même légèrement, utilise slightly_blurred et blur.
+PIÈCE D'IDENTITÉ : vérifie la lisibilité effective des informations administratives, pas une
+perfection photographique. Examine les valeurs imprimées : état civil, dates, numéro, adresse,
+mentions administratives et caractères de la zone MRZ, lorsqu'ils sont présents sur cette face.
+Quelques gros mots lisibles ou une zone MRZ lisible ne suffisent pas. Ne reconstitue aucun caractère
+en t'appuyant sur le contexte, une autre zone ou la mise en page connue du document.
+Un léger manque de piqué, le grain d'un scan ou des contours adoucis ne sont PAS à eux seuls un
+échec si chaque caractère utile reste directement identifiable. Utilise slightly_blurred / blur
+quand le flou empêche de distinguer avec certitude un ou plusieurs caractères utiles ; poor si
+la lecture est nettement dégradée. Sinon readability clear, même si l'image n'est pas parfaite.
 Si une information utile est coupée, trop petite, masquée par un reflet ou difficile à déchiffrer,
-indique le problème. all_fields_legible ne peut être true que si toutes les informations présentes
-sur chaque face fournie sont directement lisibles sans deviner, y compris les petits caractères.
+indique le problème. all_fields_legible peut être true si toutes les valeurs administratives
+présentes sur cette face sont directement lisibles sans deviner, y compris les petites valeurs.
+Ne demande PAS de lire les micro-impressions décoratives, les motifs guillochés ou le texte de
+sécurité en arrière-plan. Les hologrammes, effets irisés, portraits fantômes/secondaires et images
+lenticulaires sont normaux sur les cartes : leur aspect pâle, variable ou flou ne prouve ni un
+flou de prise de vue ni un reflet gênant. Évalue séparément le vrai texte administratif. Une zone
+de sécurité brillante, ou un reflet hors des champs utiles, n'est pas un problème de lisibilité.
+Une signature manuscrite n'a pas à former un texte déchiffrable ; ne cherche pas non plus à
+décoder la puce ou un code 2D. Dans problems, signale uniquement les défauts qui affectent les
+informations utiles : si elles sont toutes lisibles, les seuls motifs de sécurité ne doivent
+produire ni blur, ni glare, ni small_text, ni unreadable_fields.
 Une face recto ou verso seule peut être lisible : ne suppose pas qu'une face absente est floue.
 Dans le doute, utilise uncertain / medium ou low, jamais clear / high par défaut.
 Tu reçois UNE PAGE ENTIÈRE puis quatre VUES DE DÉTAIL de cette même page. Ces détails ne sont
 PAS des pages ou faces supplémentaires. Examine les détails pour juger les contours des petits
 caractères et les reflets, mais utilise uniquement la vue entière pour les bords et les faces.
-Pour chaque identity_checks : sharp_text = pass uniquement si les caractères ont des contours
-francs, fail même pour un léger flou ; all_fields_readable = pass uniquement si CHAQUE champ
-présent est directement lisible, y compris les petits caractères et la zone machine ;
-whole_document_visible = pass uniquement si aucun bord/coin ni aucune zone utile du document
-n'est coupé ; no_glare = fail dès qu'un reflet lumineux/zone surexposée est visible sur la pièce,
-même si tu parviens à deviner le texte ; no_obstruction = fail si doigt, objet ou ombre masque
-une information. Une zone douteuse => uncertain, jamais pass. Ne compense jamais un champ
-flou ou reflété par une zone MRZ ou un autre texte plus net. Un scan lisible au premier regard
-peut rester légèrement flou : contrôle les petits caractères avant de décider.
+Pour chaque identity_checks : sharp_text = pass si les caractères administratifs sont assez
+nets pour être distingués sans ambiguïté, fail si leur flou gêne réellement la lecture ;
+all_fields_readable = pass si CHAQUE valeur administrative présente et la zone machine sont
+directement lisibles, à l'exclusion des seuls motifs/micro-impressions de sécurité ;
+whole_document_visible = pass si la face entière et toutes ses zones utiles sont présentes.
+Une marge blanche du PDF ou un mince liseré extérieur rogné sans perte de zone utile ne suffit
+pas à conclure cropped. no_glare = fail uniquement si une réflexion/surexposition masque ou rend
+ambigu un caractère utile ou la photo principale ; sinon pass. Ne confonds pas l'hologramme
+normal avec ce défaut. no_obstruction = fail si doigt, objet ou ombre masque une information.
+Une valeur administrative réellement douteuse => uncertain, jamais pass. Ne compense jamais
+un champ illisible par une zone MRZ ou un autre texte plus net. Ne déduis pas de défaut uniquement
+de l'aspect du fond de sécurité : contrôle les valeurs administratives dans les vues de détail.
 Identifie identity_document et les faces réellement visibles : carte d'identité identity_card,
 titre de séjour residence_permit, passeport passport. Pour une carte/titre : front et/ou back.
 Le recto comporte généralement la photo principale et les informations d'état civil. Le verso
