@@ -288,7 +288,7 @@ class AdvisoryTests(unittest.TestCase):
         self.assertTrue(payload["text"]["format"]["strict"])
         self.assertEqual(payload["input"][0]["content"][1]["type"], "input_image")
         self.assertEqual(payload["model"], "gpt-5.4")
-        self.assertEqual(payload["reasoning"], {"effort": "none"})
+        self.assertEqual(payload["reasoning"], {"effort": "low"})
         self.assertEqual(payload["input"][0]["content"][1]["detail"], "original")
         self.assertEqual(len([part for part in payload["input"][0]["content"] if part["type"] == "input_image"]), 1)
         self.assertNotIn("quatre VUES", payload["instructions"])
