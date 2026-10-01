@@ -268,7 +268,7 @@ def render_pages(data):
     return images
 
 
-def call_openai(images, kind, api_key):
+def call_openai(images, kind, api_key, timeout=25):
     payload = {
         "model": os.getenv("OPENAI_DOCUMENT_MODEL", "gpt-4.1").strip() or "gpt-4.1",
         "store": False,
@@ -283,7 +283,7 @@ def call_openai(images, kind, api_key):
     req = Request("https://api.openai.com/v1/responses", data=json.dumps(payload).encode("utf-8"),
                   headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}, method="POST")
     # No retries: an outage must not multiply charges or keep the form waiting.
-    with urlopen(req, timeout=25) as response:
+    with urlopen(req, timeout=timeout) as response:
         raw = response.read(128 * 1024 + 1)
     if len(raw) > 128 * 1024:
         raise ValueError("response_limit")
@@ -298,7 +298,27 @@ def call_openai(images, kind, api_key):
     return check_schema(json.loads(text))
 
 
-def reserve_usage(db_path, token, now):
+def analyze_images(images, kind, api_key, today):
+    if kind not in {"identity", "host_identity"}:
+        return advisory(call_openai(images, kind, api_key), kind, today)
+    # An independently sharp page must never allow the model to reconstruct
+    # blurred characters on another page (especially duplicated recto/verso scans).
+    deadline = time.monotonic() + 25
+    answers = []
+    for image in images:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return unavailable(kind)
+        answer = advisory(call_openai([image], kind, api_key, timeout=remaining), kind, today)
+        if answer["status"] == "warning":
+            return answer
+        answers.append(answer)
+    if not answers or any(answer["status"] != "success" for answer in answers):
+        return unavailable(kind)
+    return answers[0]
+
+
+def reserve_usage(db_path, token, now, units=1):
     """Persistent counters only; no files, extracted text or identity data are stored."""
     hour = int(now // 3600)
     day = datetime.fromtimestamp(now, FRANCE_TZ).date().isoformat()
@@ -309,11 +329,11 @@ def reserve_usage(db_path, token, now):
         conn.execute("DELETE FROM document_analysis_usage WHERE expires < ?", (int(now),))
         for bucket, limit in limits:
             row = conn.execute("SELECT used FROM document_analysis_usage WHERE bucket = ?", (bucket,)).fetchone()
-            if row and row[0] >= limit:
+            if (row[0] if row else 0) + units > limit:
                 return False
         for bucket, _ in limits:
-            conn.execute("INSERT INTO document_analysis_usage VALUES (?, 1, ?) ON CONFLICT(bucket) DO UPDATE SET used = used + 1",
-                         (bucket, int(now) + 2 * 86400))
+            conn.execute("INSERT INTO document_analysis_usage VALUES (?, ?, ?) ON CONFLICT(bucket) DO UPDATE SET used = used + excluded.used",
+                         (bucket, units, int(now) + 2 * 86400))
     return True
 
 
@@ -366,10 +386,11 @@ def register_document_analysis(app, db_path):
             if not _slots.acquire(blocking=False):
                 return jsonify(unavailable(kind)), 429
             try:
-                if not reserve_usage(db_path(), token, now):
-                    return jsonify(unavailable(kind)), 429
                 images = render_photo(data) if kind == "identity_photo" else render_pages(data)
-                result = advisory(call_openai(images, kind, api_key), kind, today)
+                units = len(images) if kind in {"identity", "host_identity"} else 1
+                if not reserve_usage(db_path(), token, now, units=units):
+                    return jsonify(unavailable(kind)), 429
+                result = analyze_images(images, kind, api_key, today)
                 with _cache_lock:
                     _cache[key] = (now, result)
                     _cache.move_to_end(key)

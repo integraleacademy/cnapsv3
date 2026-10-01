@@ -138,6 +138,25 @@ class AdvisoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             checks.check_schema(model_result(signature="verified_authentic"))
 
+    def test_each_identity_page_is_analyzed_separately_and_worst_result_wins(self):
+        for kind in ["identity", "host_identity"]:
+            with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(problems=["blur"])]) as provider:
+                answer = checks.analyze_images(["clear-page", "blurry-page"], kind, "test-key", date.today())
+                self.assertEqual(answer["status"], "warning")
+                self.assertEqual([call.args[0] for call in provider.call_args_list], [["clear-page"], ["blurry-page"]])
+                self.assertGreater(provider.call_args_list[0].kwargs["timeout"], provider.call_args_list[1].kwargs["timeout"])
+                self.assertLessEqual(provider.call_args_list[0].kwargs["timeout"], 25)
+            with patch.object(checks, "call_openai", side_effect=[model_result(), model_result(confidence="low")]):
+                self.assertEqual(checks.analyze_images(["one", "two"], kind, "test-key", date.today())["status"], "unknown")
+        with patch.object(checks, "call_openai", return_value=model_result(problems=["blur"])) as provider:
+            self.assertEqual(checks.analyze_images(["bad", "second"], "identity", "test-key", date.today())["status"], "warning")
+            self.assertEqual(provider.call_count, 1, "stop spending calls once the file needs replacement")
+
+    def test_page_analysis_has_one_overall_time_budget(self):
+        with patch.object(checks.time, "monotonic", side_effect=[100, 100, 126]), patch.object(checks, "call_openai", return_value=model_result()) as provider:
+            self.assertEqual(checks.analyze_images(["one", "two"], "identity", "test-key", date.today())["status"], "unknown")
+            self.assertEqual(provider.call_count, 1)
+
     def test_only_visible_pdf_pages_are_rendered_and_oversized_documents_are_refused(self):
         images = checks.render_pages(blank_pdf())
         self.assertEqual(len(images), 1)
@@ -256,6 +275,16 @@ class EndpointTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             accepted = list(pool.map(lambda _: checks.reserve_usage(self.db, "one-session", 100000), range(35)))
         self.assertEqual(sum(accepted), 29)
+
+    def test_multipage_identity_reserves_provider_calls_for_all_pages(self):
+        self.render.return_value = ["one", "two", "three"]
+        self.assertEqual(self.submit().json["status"], "success")
+        self.assertEqual(self.provider.call_count, 3)
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual({row[0] for row in conn.execute("SELECT used FROM document_analysis_usage")}, {3})
+        self.assertTrue(checks.reserve_usage(self.db, "another-session", 100000, units=28))
+        self.assertFalse(checks.reserve_usage(self.db, "another-session", 100000, units=3))
+        self.assertTrue(checks.reserve_usage(self.db, "another-session", 100000, units=2))
 
 
 if __name__ == "__main__":
