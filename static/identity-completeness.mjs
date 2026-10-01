@@ -1,12 +1,28 @@
 // Combines only non-identifying observations, across PDF pages AND selected files.
 // It does not compare faces, names or document numbers and never changes admin status.
+function knownFace(item) {
+  return item?.confidence === 'high' && Array.isArray(item.sides) &&
+    (['identity_card', 'residence_permit'].includes(item.type) ? item.sides.some(side => ['front', 'back'].includes(side)) :
+      item.type === 'passport' && item.sides.includes('passport_biodata'));
+}
+
+export function identityEvidenceLabel(result) {
+  const evidence = Array.isArray(result.identity_evidence) ? result.identity_evidence.filter(knownFace) : [];
+  const labels = evidence.flatMap(item => item.sides.map(side => {
+    if (item.type === 'passport' && side === 'passport_biodata') return 'Passeport — page avec photo';
+    if (!['front', 'back'].includes(side)) return null;
+    return `${item.type === 'identity_card' ? 'Carte d’identité' : 'Titre de séjour'} — ${side === 'front' ? 'recto' : 'verso'}`;
+  })).filter(Boolean);
+  return [...new Set(labels)].join(' · ') || 'Faces du document à confirmer';
+}
+
 export function identityCompleteness(results, { partial = false } = {}) {
   if (!results.length) return null;
   if (results.some(result => !result)) return { status: 'pending', title: 'Vérification des faces en cours', message: 'Je vérifie le type de pièce et les faces présentes dans vos fichiers…' };
   if (results.some(result => result.status === 'warning')) return { status: 'warning', title: 'Pièce d’identité à corriger', message: 'Un fichier présente un problème. Consultez les alertes ci-dessous et remplacez-le par une version nette, complète et sans reflet.' };
   if (results.some(result => result.status !== 'success')) return { status: 'unknown', title: 'Pièce d’identité à vérifier', message: 'La vérification n’a pas pu être confirmée. Vérifiez la lisibilité et, pour une carte d’identité ou un titre de séjour, la présence du recto et du verso.' };
   const evidence = results.flatMap(result => Array.isArray(result.identity_evidence) ? result.identity_evidence : []);
-  const known = evidence.filter(item => item?.confidence === 'high' && Array.isArray(item.sides));
+  const known = evidence.filter(knownFace);
   if (known.some(item => item.type === 'passport' && item.sides.includes('passport_biodata'))) {
     return { status: 'success', title: 'Passeport : c’est bon !', message: 'La page d’identité avec la photo est présente et lisible. Aucun verso n’est nécessaire.' };
   }
@@ -15,6 +31,10 @@ export function identityCompleteness(results, { partial = false } = {}) {
     if (sides.has('front') && sides.has('back')) return { status: 'success', title: 'Recto et verso vérifiés', message: 'Les deux faces sont présentes et lisibles dans les fichiers sélectionnés.' };
   }
   if (partial) return { status: 'info', title: 'Fichier de remplacement vérifié', message: 'Ce contrôle porte sur les nouveaux fichiers sélectionnés. Pour une carte d’identité ou un titre de séjour, vérifiez que votre dossier contient bien les deux faces, y compris les documents déjà transmis.' };
+  // An unidentified page might be the required second side. Do not claim it is absent.
+  if (results.some(result => !result.identity_evidence?.length) || known.length !== evidence.length) {
+    return { status: 'unknown', title: 'Recto et verso à confirmer', message: 'Vos fichiers sont lisibles, mais je n’ai pas pu reconnaître toutes les faces avec certitude. Vérifiez que la carte d’identité ou le titre de séjour est bien fourni recto et verso. Pour un passeport, seule la page avec photo est nécessaire.' };
+  }
   for (const type of ['identity_card', 'residence_permit']) {
     const sides = new Set(known.filter(item => item.type === type).flatMap(item => item.sides));
     if (sides.has('front') || sides.has('back')) {

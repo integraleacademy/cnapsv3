@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { identityCompleteness } from '../static/identity-completeness.mjs';
+import { identityCompleteness, identityEvidenceLabel } from '../static/identity-completeness.mjs';
 
 const page = (type, sides, confidence = 'high') => ({type, sides, confidence});
 const file = (...evidence) => ({status: 'success', identity_evidence: evidence});
@@ -19,12 +19,22 @@ test('a passport needs only its biodata page and never asks for a verso', () => 
   assert.notEqual(identityCompleteness([file(page('passport', []))]).status, 'success');
 });
 test('a missing side or duplicate front cannot be marked complete', () => {
-  assert.equal(identityCompleteness([file(front)]).missing, 'back' === 'verso' ? 'back' : 'verso');
+  assert.equal(identityCompleteness([file(front)]).missing, 'verso');
   assert.equal(identityCompleteness([file(back)]).missing, 'recto');
   assert.equal(identityCompleteness([file(front), file(front)]).status, 'warning');
   assert.equal(identityCompleteness([file(page('residence_permit', ['front']))]).missing, 'verso');
   assert.equal(identityCompleteness([file(page('residence_permit', ['front'])), file(page('residence_permit', ['back']))]).status, 'success');
   assert.notEqual(identityCompleteness([file(front), file(page('residence_permit', ['back']))]).status, 'success');
+});
+test('a readable but unidentified second page is uncertain, not falsely missing', () => {
+  for (const second of [file(page('identity_card', ['back'], 'low')), file(page('uncertain', [])), file()]) {
+    const result = identityCompleteness([file(front), second]);
+    assert.equal(result.status, 'unknown');
+    assert.equal(result.missing, undefined);
+  }
+  assert.equal(identityEvidenceLabel(file(front, back)), 'Carte d’identité — recto · Carte d’identité — verso');
+  assert.equal(identityEvidenceLabel(file(page('passport', ['passport_biodata']))), 'Passeport — page avec photo');
+  assert.equal(identityEvidenceLabel(file(page('identity_card', ['back'], 'low'))), 'Faces du document à confirmer');
 });
 test('uncertainty or unreadable files never become a green overall result', () => {
   for (const files of [[file(front), null], [file(front), {status:'warning'}], [file(front), {status:'unknown'}], [file(front), file(page('identity_card', ['back'], 'low'))]]) {
