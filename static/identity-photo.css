@@ -67,7 +67,32 @@
   line-height: 1.5;
 }
 .photo-file-error { color: #b91c1c; font-weight: 700; }
+.dossier-photo-overview {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid #dbe5f5;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+.dossier-photo-overview h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.dossier-photo-overview p { margin: 6px 0; overflow-wrap: anywhere; }
+.dossier-photo-portrait {
+  display: block;
+  width: 112px;
+  height: 144px;
+  object-fit: contain;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+.dossier-photo-empty { font-size: 2rem; padding: 20px; }
+.dossier-photo-overview > div { min-width: 0; }
 @media (max-width: 640px) {
   .identity-photo-card { padding: 14px; }
   .photo-guidance { padding: 12px; }
+  .dossier-photo-overview { align-items: flex-start; gap: 12px; padding: 12px; }
+  .dossier-photo-portrait { width: 84px; height: 108px; }
 }

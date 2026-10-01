@@ -89,6 +89,7 @@ DEBUG_SUMMARY = os.getenv("DEBUG_SUMMARY", "0").strip() == "1"
 UPLOAD_DIR = os.getenv("CNAPS_UPLOAD_DIR", "/mnt/data/uploads")
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024
 FRANCE_TZ = ZoneInfo("Europe/Paris")
+app.jinja_env.globals["document_check_today"] = lambda: datetime.now(FRANCE_TZ).date().isoformat()
 
 
 MONTHS_FR = {
@@ -1942,8 +1943,8 @@ DOC_LABELS = {
 CHECKLIST_LABELS = [
     "J'ai bien fourni ma carte d'identité RECTO et VERSO (face avant, face arrière) ou mon passeport.",
     "J'ai fourni une photo d'identité officielle respectant tous les critères indiqués. J'ai compris que mon dossier sera rejeté si ma photo n'est pas conforme.",
-    "Les documents que j'ai fourni sont bien LISIBLES et ne sont pas flous.",
-    "Mon justificatif de domicile a bien MOINS DE 3 MOIS.",
+    "J'ai vérifié la lisibilité de mes documents et pris connaissance des alertes éventuelles.",
+    "J'ai vérifié la date de mon justificatif de domicile et pris connaissance du critère de moins de 3 mois.",
     "Mon justificatif de domicile N'EST PAS UNE FACTURE DE TÉLÉPHONE.",
     "Si je suis hébergé, j'ai bien fourni la pièce d'identité de mon hébergeant RECTO et VERSO (face avant, face arrière).",
     "Si je suis hébergé, j'ai vérifié que l'attestation d'hébergement est bien signée.",

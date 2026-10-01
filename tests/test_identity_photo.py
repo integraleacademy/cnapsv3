@@ -91,6 +91,21 @@ class IdentityPhotoTests(unittest.TestCase):
         self.assertIn("sans capture d'écran", html)
         self.assertIn("J&#39;ai compris que mon dossier sera rejeté", html)
 
+    def test_public_form_has_non_blocking_document_checks_and_signature_reminder(self):
+        html = self.client.get("/public-form").get_data(as_text=True)
+        for doc_type in ("identity", "host_identity", "proof_address", "hosting_certificate"):
+            self.assertIn(f'data-document-check="{doc_type}"', html)
+        self.assertIn('data-check-date="', html)
+        self.assertIn("Avez-vous vérifié que l'attestation d'hébergement est bien signée", html)
+        self.assertIn('type="module" src="/static/document-checks.mjs"', html)
+
+    def test_photo_is_visible_at_top_of_admin_document_page(self):
+        request_id = self.create_request()
+        html = self.admin.get(f"/a-traiter/{request_id}/documents").get_data(as_text=True)
+        self.assertLess(html.index('<section class="dossier-photo-overview"'), html.index('id="ajouter-document"'))
+        self.assertIn('loading="eager" fetchpriority="high"', html)
+        self.assertIn('alt="Photo d\'identité de Photo Test"', html)
+
     def test_photo_is_required_server_side(self):
         response = self.submit(self.payload(include_photo=False))
         self.assertIn("Document manquant : Photo", response.get_data(as_text=True))

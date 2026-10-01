@@ -458,6 +458,24 @@
     </div>
 
     <h1>Documents de {{ req.prenom }} {{ req.nom }}</h1>
+    <section class="dossier-photo-overview" aria-label="Photo d'identité du dossier">
+      {% set photos = grouped.get('identity_photo', []) %}
+      {% if photos %}
+        {% set photo = photos[0] %}
+        <a href="/uploads/{{ req.id }}/{{ photo.stored_name }}" target="_blank" rel="noopener" aria-label="Agrandir la photo d'identité">
+          <img class="dossier-photo-portrait" src="/uploads/{{ req.id }}/{{ photo.stored_name }}" alt="Photo d'identité de {{ req.prenom }} {{ req.nom }}" loading="eager" fetchpriority="high">
+        </a>
+        <div>
+          <h2>Photo d'identité</h2>
+          <p>{% if photo.is_conforme == 1 %}✅ Conforme{% elif photo.is_conforme == 0 %}❌ Non conforme{% else %}⏳ À contrôler{% endif %}</p>
+          {% if photo.non_conformite_reason %}<p>{{ photo.non_conformite_reason }}</p>{% endif %}
+          <a class="doc-link" href="#controle-photo-identite">Contrôler ou remplacer la photo ↓</a>
+        </div>
+      {% else %}
+        <div class="dossier-photo-empty" aria-hidden="true">📷</div>
+        <div><h2>Photo d'identité non fournie</h2><p>Vous pouvez l'ajouter au dossier ou la demander dans « Documents manquants ».</p><a class="doc-link" href="#ajouter-document">Ajouter une photo ↓</a></div>
+      {% endif %}
+    </section>
     <p class="subtitle">Sélectionnez un statut clair pour chaque document puis notifiez les non-conformités.</p>
     <p id="autosave-status" class="autosave-status">Les changements sont sauvegardés automatiquement.</p>
 
@@ -517,9 +535,9 @@
       </div>
 
       {% for doc_type, docs in grouped.items() %}
-        <h2 class="group-title">{{ doc_labels.get(doc_type, doc_type) }}</h2>
+        <h2 class="group-title" {% if doc_type == 'identity_photo' %}id="controle-photo-identite"{% endif %}>{{ doc_labels.get(doc_type, doc_type) }}</h2>
         {% if doc_type == 'identity_photo' %}
-          {% include '_identity_photo_guidance.html' %}
+          <details><summary>Rappeler les critères de conformité de la photo</summary>{% include '_identity_photo_guidance.html' %}</details>
         {% endif %}
         {% for d in docs %}
           <div class="doc">

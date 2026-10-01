@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='document-checks.css') }}">
   <title>Remplacement des documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -203,7 +204,7 @@
         {% endfor %}
       {% endwith %}
 
-      <form method="post" enctype="multipart/form-data">
+      <form method="post" enctype="multipart/form-data" data-check-date="{{ document_check_today() }}">
         {% for d in invalids %}
           <section class="doc-card">
             <div class="doc-title">{{ labels.get(d.doc_type, d.doc_type) }}</div>
@@ -213,7 +214,8 @@
             {% else %}
               <p class="file-help">Choisissez une version nette et complète du document au format PDF.</p>
             {% endif %}
-            <input type="file" name="replace_{{ d.id }}" aria-label="{{ labels.get(d.doc_type, d.doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if d.doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if d.doc_type == 'identity_photo' %}data-identity-photo{% endif %} required>
+            {% if d.doc_type == 'hosting_certificate' %}<p class="hosting-signature-reminder">⚠️ Avez-vous vérifié que l'attestation d'hébergement est bien signée ?</p>{% endif %}
+            <input type="file" name="replace_{{ d.id }}" aria-label="{{ labels.get(d.doc_type, d.doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if d.doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if d.doc_type == 'identity_photo' %}data-identity-photo{% endif %} {% if d.doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate'] %}data-document-check="{{ d.doc_type }}"{% endif %} required>
           </section>
         {% endfor %}
 
@@ -226,7 +228,8 @@
             {% else %}
               <p class="file-help">Ajoutez le document demandé au format PDF.</p>
             {% endif %}
-            <input type="file" name="missing_{{ doc_type }}" aria-label="{{ labels.get(doc_type, doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if doc_type == 'identity_photo' %}data-identity-photo{% endif %} required>
+            {% if doc_type == 'hosting_certificate' %}<p class="hosting-signature-reminder">⚠️ Avez-vous vérifié que l'attestation d'hébergement est bien signée ?</p>{% endif %}
+            <input type="file" name="missing_{{ doc_type }}" aria-label="{{ labels.get(doc_type, doc_type) }}" accept="{{ 'image/jpeg,image/png,.jpg,.jpeg,.png' if doc_type == 'identity_photo' else 'application/pdf,.pdf' }}" {% if doc_type == 'identity_photo' %}data-identity-photo{% endif %} {% if doc_type in ['identity', 'host_identity', 'proof_address', 'hosting_certificate'] %}data-document-check="{{ doc_type }}"{% endif %} required>
           </section>
         {% endfor %}
 
@@ -235,5 +238,6 @@
     </section>
   </main>
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='document-checks.mjs') }}"></script>
 </body>
 </html>
