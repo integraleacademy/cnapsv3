@@ -1,0 +1,23 @@
+<dialog class="document-analysis-modal" aria-labelledby="analysis-modal-title" aria-describedby="analysis-modal-detail">
+  <div class="analysis-modal-content">
+    <button type="button" class="analysis-modal-close" data-analysis-dismiss aria-label="Fermer et continuer à remplir le formulaire">×</button>
+    <div class="analysis-brand">
+      <img src="{{ url_for('static', filename='logo.png') }}" width="64" height="64" alt="Intégrale Academy">
+      <div><strong>INTÉGRALE ACADEMY</strong><span>Votre dossier, accompagné à chaque étape</span></div>
+    </div>
+    <div class="analysis-visual" aria-hidden="true">
+      <div class="analysis-orbit"></div>
+      <div class="analysis-paper"><i></i><i></i><i></i><div class="analysis-scan"></div></div>
+      <span class="analysis-spark">✦</span>
+    </div>
+    <div class="analysis-eyebrow">VÉRIFICATION EN COURS</div>
+    <h2 id="analysis-modal-title">Un instant, nous vérifions<br>votre document</h2>
+    <p id="analysis-modal-detail" data-analysis-label></p>
+    <div class="analysis-file"><span aria-hidden="true">↗</span><span data-analysis-filename></span></div>
+    <ul class="analysis-steps" data-analysis-steps></ul>
+    <div class="analysis-progress" role="progressbar" aria-label="Analyse du document en cours"><span></span></div>
+    <p class="analysis-wait" role="status" data-analysis-wait>Cela peut prendre quelques instants.</p>
+    <button type="button" class="analysis-modal-continue" data-analysis-dismiss>Continuer à remplir le formulaire <span aria-hidden="true">→</span></button>
+    <p class="analysis-footnote">Le résultat apparaîtra sous votre fichier.<br>Le contrôle final sera effectué par notre équipe.</p>
+  </div>
+</dialog>

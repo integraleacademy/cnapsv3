@@ -3,12 +3,14 @@ let queue = Promise.resolve();
 
 function stopped() { return new DOMException('Analysis cancelled', 'AbortError'); }
 
-export function analyzeDocument(file, kind, _today, { signal, token } = {}) {
+export function analyzeDocument(file, kind, _today, { signal, token, onStart } = {}) {
   const task = queue.then(async () => {
     if (signal?.aborted) throw stopped();
-    if (!token || !/\.pdf$/i.test(file.name) || !file.size || file.size > 5 * 1024 * 1024) {
+    const extension = kind === 'identity_photo' ? /\.(jpe?g|png)$/i : /\.pdf$/i;
+    if (!token || !extension.test(file.name) || !file.size || file.size > 5 * 1024 * 1024) {
       throw new Error('Analysis unavailable');
     }
+    onStart?.();
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
@@ -23,7 +25,9 @@ export function analyzeDocument(file, kind, _today, { signal, token } = {}) {
       });
       if (!response.ok) throw new Error('Analysis unavailable');
       const result = await response.json();
-      if (!['info', 'warning', 'unknown'].includes(result.status) || typeof result.message !== 'string') {
+      if (!['success', 'info', 'warning', 'unknown'].includes(result.status) || typeof result.message !== 'string'
+          || (result.title !== undefined && typeof result.title !== 'string')
+          || (result.critical !== undefined && typeof result.critical !== 'string')) {
         throw new Error('Invalid analysis');
       }
       return result;

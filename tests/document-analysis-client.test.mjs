@@ -39,5 +39,28 @@ test('network errors do not break the next analysis; cancellation prevents uploa
 test('unavailable checks use the requested document-specific instructions', () => {
   assert.equal(unavailableMessage('proof_address'), "La vérification automatique n'a pas pu aboutir. Veuillez vérifier que votre justificatif de domicile a moins de 3 mois.");
   assert.equal(unavailableMessage('identity'), "La vérification automatique n'a pas pu aboutir. Veuillez vérifier que votre pièce d’identité est bien lisible.");
-  assert.equal(unavailableMessage('host_identity'), unavailableMessage('identity'));
+  assert.match(unavailableMessage('host_identity'), /personne qui vous héberge/);
+  assert.match(unavailableMessage('hosting_certificate'), /bien signée/);
+  assert.match(unavailableMessage('identity_photo'), /tous les critères/);
+});
+
+test('JPEG and PNG photos reach analysis and accept a green success result', async () => {
+  const previous = globalThis.fetch;
+  let calls = 0;
+  let started = 0;
+  globalThis.fetch = async (_url, options) => {
+    calls++;
+    assert.equal(options.body.get('kind'), 'identity_photo');
+    return { ok: true, json: async () => ({ status: 'success', title: 'Critères vérifiés', message: 'Photo nette' }) };
+  };
+  try {
+    for (const name of ['photo.jpg', 'photo.PNG']) {
+      const answer = await analyzeDocument(new File(['pixels'], name), 'identity_photo', '', { token: 'token', onStart: () => started++ });
+      assert.equal(answer.status, 'success');
+    }
+    await assert.rejects(analyzeDocument(file(), 'identity_photo', '', { token: 'token' }));
+    await assert.rejects(analyzeDocument(new File(['pixels'], 'photo.png'), 'identity', '', { token: 'token' }));
+    assert.equal(calls, 2);
+    assert.equal(started, 2);
+  } finally { globalThis.fetch = previous; }
 });

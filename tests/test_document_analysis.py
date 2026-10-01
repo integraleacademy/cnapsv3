@@ -20,6 +20,8 @@ def model_result(**changes):
         "document_type": "identity", "confidence": "high", "document_date": None,
         "date_kind": "uncertain", "date_confidence": "low", "readability": "clear",
         "all_fields_legible": True, "problems": [],
+        "photo_criteria": {key: "not_applicable" for key in checks.PHOTO_CRITERIA},
+        "signature": "not_applicable", "signature_confidence": "low",
     }
     result.update(changes)
     return result
@@ -39,14 +41,14 @@ class AdvisoryTests(unittest.TestCase):
         result = model_result(document_type="address", document_date="2026-09-30",
                               date_kind="attestation", date_confidence="high")
         answer = checks.advisory(result, "proof_address", date(2026, 10, 1))
-        self.assertEqual(answer["status"], "info")
+        self.assertEqual(answer["status"], "success")
         self.assertIn("30/09/2026", answer["message"])
 
     def test_calendar_boundary_old_recent_and_future_dates(self):
         self.assertEqual(checks.three_months_before(date(2024, 5, 31)), date(2024, 2, 29))
         self.assertEqual(checks.three_months_before(date(2026, 5, 31)), date(2026, 2, 28))
         for issued, expected in [("2026-06-30", "warning"), ("2026-07-01", "warning"),
-                                 ("2026-07-02", "info"), ("2026-10-02", "unknown")]:
+                                 ("2026-07-02", "success"), ("2026-10-02", "unknown")]:
             with self.subTest(issued=issued):
                 result = model_result(document_type="address", document_date=issued,
                                       date_kind="invoice", date_confidence="high")
@@ -69,10 +71,72 @@ class AdvisoryTests(unittest.TestCase):
 
     def test_clear_result_is_cautious_and_unknown_never_means_validated(self):
         answer = checks.advisory(model_result(), "host_identity", date.today())
-        self.assertEqual(answer["status"], "info")
-        self.assertIn("ne vaut pas validation", answer["message"])
+        self.assertEqual(answer["status"], "success")
+        self.assertIn("Notre équipe confirmera", answer["message"])
+        self.assertIn("personne qui vous héberge", answer["message"])
         for fields in [{"readability": "uncertain"}, {"confidence": "medium"}, {"document_type": "other"}]:
             self.assertEqual(checks.advisory(model_result(**fields), "identity", date.today())["status"], "unknown")
+
+    def test_unreadable_candidate_and_host_ids_warn_of_rejection(self):
+        for kind in ["identity", "host_identity"]:
+            answer = checks.advisory(model_result(problems=["blur"]), kind, date.today())
+            self.assertEqual(answer["status"], "warning")
+            self.assertIn("sera rejetée", answer["critical"])
+            if kind == "host_identity":
+                self.assertIn("personne qui vous héberge", answer["message"])
+
+    def test_photo_requires_every_visible_criterion_and_high_confidence(self):
+        criteria = {key: "pass" for key in checks.PHOTO_CRITERIA}
+        valid = model_result(document_type="portrait", photo_criteria=criteria, all_fields_legible=False)
+        result = checks.advisory(valid, "identity_photo", date.today())
+        self.assertEqual(result["status"], "success")
+        self.assertIn("moins de 6 mois", result["message"])
+        self.assertIn("confirmera", result["message"])
+        for key in criteria:
+            for value, status in [("fail", "warning"), ("uncertain", "unknown"), ("not_applicable", "unknown")]:
+                changed = dict(valid, photo_criteria={**criteria, key: value})
+                answer = checks.advisory(changed, "identity_photo", date.today())
+                self.assertEqual(answer["status"], status, (key, value))
+                if status == "warning":
+                    self.assertIn(checks.PHOTO_CRITERIA[key], answer["message"])
+                    self.assertIn("rejet", answer["critical"])
+        self.assertEqual(checks.advisory(dict(valid, confidence="medium"), "identity_photo", date.today())["status"], "unknown")
+        self.assertEqual(checks.advisory(model_result(), "identity_photo", date.today())["status"], "warning")
+
+    def test_signature_detection_never_certifies_authenticity_or_an_uncertain_signature(self):
+        base = model_result(document_type="hosting_certificate", signature_confidence="high")
+        for signature, status in [("present", "success"), ("absent", "warning"), ("uncertain", "unknown"), ("not_applicable", "unknown")]:
+            answer = checks.advisory(dict(base, signature=signature), "hosting_certificate", date.today())
+            self.assertEqual(answer["status"], status)
+            if status == "success":
+                self.assertIn("ne certifie pas son authenticité", answer["message"])
+        for changes in [{"signature_confidence": "medium"}, {"confidence": "medium"}, {"document_type": "address"}]:
+            self.assertEqual(checks.advisory(dict(base, signature="present", **changes), "hosting_certificate", date.today())["status"], "unknown")
+
+    def test_photo_decoder_uses_pixels_and_rejects_non_images_and_animation(self):
+        for fmt in ["JPEG", "PNG"]:
+            stream = io.BytesIO()
+            Image.new("RGB", (300, 400), "gray").save(stream, format=fmt)
+            rendered = checks.render_photo(stream.getvalue())
+            with Image.open(io.BytesIO(base64.b64decode(rendered[0]))) as image:
+                self.assertEqual(image.format, "JPEG")
+                self.assertEqual(image.size, (300, 400))
+        for data in [b"not an image", blank_pdf()]:
+            with self.assertRaises(Exception):
+                checks.render_photo(data)
+        stream = io.BytesIO()
+        Image.new("RGB", (30, 40), "red").save(stream, format="PNG", save_all=True,
+            append_images=[Image.new("RGB", (30, 40), "blue")], duration=100)
+        with self.assertRaises(ValueError):
+            checks.render_photo(stream.getvalue())
+
+    def test_schema_requires_all_photo_and_signature_fields(self):
+        result = model_result()
+        del result["photo_criteria"]["eyes_visible"]
+        with self.assertRaises(ValueError):
+            checks.check_schema(result)
+        with self.assertRaises(ValueError):
+            checks.check_schema(model_result(signature="verified_authentic"))
 
     def test_only_visible_pdf_pages_are_rendered_and_oversized_documents_are_refused(self):
         images = checks.render_pages(blank_pdf())
@@ -128,9 +192,9 @@ class EndpointTests(unittest.TestCase):
         patch.stopall()
         self.tmp.cleanup()
 
-    def submit(self, kind="identity", headers=None, data=b"%PDF-1.4 specimen"):
+    def submit(self, kind="identity", headers=None, data=b"%PDF-1.4 specimen", filename="document.pdf"):
         return self.client.post("/api/document-analysis", data={
-            "kind": kind, "document": (io.BytesIO(data), "document.pdf")},
+            "kind": kind, "document": (io.BytesIO(data), filename)},
             headers=headers if headers is not None else {"X-Document-Check-Token": "test-session-token"},
             content_type="multipart/form-data")
 
@@ -161,11 +225,30 @@ class EndpointTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall(), [("document_analysis_usage",)])
 
     def test_size_kind_and_budget_limits_prevent_api_calls(self):
-        self.assertEqual(self.submit("hosting_certificate").status_code, 400)
+        self.assertEqual(self.submit("unsupported_kind").status_code, 400)
         self.assertEqual(self.submit(data=b"x" * (checks.MAX_BYTES + 1)).status_code, 413)
         with patch.object(checks, "reserve_usage", return_value=False):
             self.assertEqual(self.submit().status_code, 429)
         self.provider.assert_not_called()
+
+    def test_photo_signature_and_host_identity_reach_their_specific_analysis(self):
+        stream = io.BytesIO()
+        Image.new("RGB", (30, 40), "gray").save(stream, format="PNG")
+        self.provider.return_value = model_result(document_type="portrait", photo_criteria={key: "pass" for key in checks.PHOTO_CRITERIA})
+        photo = self.submit("identity_photo", data=stream.getvalue(), filename="photo.png")
+        self.assertEqual(photo.status_code, 200)
+        self.assertEqual(photo.json["status"], "success")
+        self.assertEqual(self.provider.call_args.args[1], "identity_photo")
+        self.render.assert_not_called()
+        self.provider.return_value = model_result(document_type="hosting_certificate", signature="absent", signature_confidence="high")
+        self.assertEqual(self.submit("hosting_certificate").json["status"], "warning")
+        self.assertEqual(self.provider.call_args.args[1], "hosting_certificate")
+        self.provider.return_value = model_result(problems=["blur"])
+        self.assertIn("personne qui vous héberge", self.submit("host_identity").json["message"])
+        calls = self.provider.call_count
+        self.assertEqual(self.submit("identity_photo").status_code, 400)
+        self.assertEqual(self.submit("identity", filename="photo.png").status_code, 400)
+        self.assertEqual(calls, self.provider.call_count)
 
     def test_rate_counter_is_atomic_across_concurrent_requests(self):
         # Initialise the table before simultaneous reservations.

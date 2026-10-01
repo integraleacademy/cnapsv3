@@ -93,12 +93,14 @@ class IdentityPhotoTests(unittest.TestCase):
 
     def test_public_form_has_non_blocking_document_checks_and_signature_reminder(self):
         html = self.client.get("/public-form").get_data(as_text=True)
-        for doc_type in ("identity", "host_identity", "proof_address", "hosting_certificate"):
+        for doc_type in ("identity", "host_identity", "proof_address", "hosting_certificate", "identity_photo"):
             self.assertIn(f'data-document-check="{doc_type}"', html)
         self.assertIn('data-check-date="', html)
+        self.assertIn('<dialog class="document-analysis-modal"', html)
+        self.assertIn('aria-labelledby="analysis-modal-title"', html)
         self.assertNotIn("Avez-vous vérifié que l'attestation d'hébergement est bien signée", html)
         self.assertIn('data-check-token="', html)
-        self.assertIn('type="module" src="/static/document-checks.mjs?v=openai-1"', html)
+        self.assertIn('type="module" src="/static/document-checks.mjs?v=visual-2"', html)
 
     def test_photo_is_visible_at_top_of_admin_document_page(self):
         request_id = self.create_request()
@@ -197,6 +199,8 @@ class IdentityPhotoTests(unittest.TestCase):
             request_id = conn.execute("INSERT INTO public_requests (nom, prenom, email, date_naissance, missing_doc_types) VALUES ('Legacy', 'Test', 'legacy@example.com', '01/01/1990', ?)", (json.dumps(["identity_photo"]),)).lastrowid
         page = self.client.get(f"/replace-documents/{request_id}").get_data(as_text=True)
         self.assertIn('name="missing_identity_photo"', page)
+        self.assertIn('data-document-check="identity_photo"', page)
+        self.assertIn('<dialog class="document-analysis-modal"', page)
         response = self.client.post(f"/replace-documents/{request_id}", data={"missing_identity_photo": photo_file("PNG")}, content_type="multipart/form-data")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.rows("SELECT missing_doc_types FROM public_requests")[0][0], "[]")
