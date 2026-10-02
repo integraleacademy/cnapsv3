@@ -21,6 +21,8 @@ def model_result(**changes):
         "date_kind": "uncertain", "date_confidence": "low", "readability": "clear",
         "all_fields_legible": True, "problems": [],
         "photo_criteria": {key: "not_applicable" for key in checks.PHOTO_CRITERIA},
+        "photo_portrait_count": "one" if changes.get("document_type") == "portrait" else "not_applicable",
+        "photo_layout": "single_photo" if changes.get("document_type") == "portrait" else "not_applicable",
         "signature": "not_applicable", "signature_confidence": "low",
         "address_kind": "water", "address_kind_confidence": "high",
         "identity_document": "identity_card", "identity_sides": ["front"], "side_confidence": "high",
@@ -221,6 +223,37 @@ class AdvisoryTests(unittest.TestCase):
         for changes in [{"signature_confidence": "medium"}, {"confidence": "medium"}, {"document_type": "address"}]:
             self.assertEqual(checks.advisory(dict(base, signature="present", **changes), "hosting_certificate", date.today())["status"], "unknown")
 
+    def test_photo_sheet_and_repeated_portraits_veto_positive_photo_checklist(self):
+        valid = model_result(document_type="portrait", photo_criteria={key: "pass" for key in checks.PHOTO_CRITERIA})
+        for changes in (
+            {"photo_portrait_count": "multiple"},  # e.g. three copies of the same face
+            {"photo_layout": "photo_sheet"},  # one remaining photo with empty boxes
+            {"photo_layout": "collage"},
+            {"document_type": "other", "photo_portrait_count": "multiple", "photo_layout": "photo_sheet"},
+            {"photo_layout": "screenshot", "photo_portrait_count": "multiple"},
+        ):
+            with self.subTest(changes=changes):
+                answer = checks.advisory({**valid, **changes}, "identity_photo", date.today())
+                self.assertEqual(answer["status"], "warning")
+                self.assertIn("même personne", answer["message"])
+                self.assertIn("recadrée autour d’un seul portrait", answer["message"])
+        self.assertEqual(checks.advisory(valid, "identity_photo", date.today())["photo_check_version"], checks.PHOTO_CHECK_VERSION)
+
+    def test_photo_layout_and_portrait_count_must_both_be_confirmed(self):
+        valid = model_result(document_type="portrait", photo_criteria={key: "pass" for key in checks.PHOTO_CRITERIA})
+        for key in ("photo_portrait_count", "photo_layout"):
+            for value in ("uncertain", "not_applicable"):
+                with self.subTest(key=key, value=value):
+                    self.assertEqual(checks.advisory({**valid, key: value}, "identity_photo", date.today())["status"], "unknown")
+            missing = dict(valid)
+            del missing[key]
+            with self.assertRaises(ValueError):
+                checks.check_schema(missing)
+            with self.assertRaises(ValueError):
+                checks.check_schema({**valid, key: "invalid"})
+        for changes in ({"photo_portrait_count": "none"}, {"photo_layout": "identity_document"}, {"photo_layout": "screenshot"}):
+            self.assertEqual(checks.advisory({**valid, **changes}, "identity_photo", date.today())["status"], "warning")
+
     def test_photo_decoder_uses_pixels_and_rejects_non_images_and_animation(self):
         for fmt in ["JPEG", "PNG"]:
             stream = io.BytesIO()
@@ -397,6 +430,19 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(self.submit("identity_photo").status_code, 400)
         self.assertEqual(self.submit("identity", filename="photo.png").status_code, 400)
         self.assertEqual(calls, self.provider.call_count)
+
+    def test_photo_sheet_warning_is_returned_and_bound_to_the_uploaded_file(self):
+        stream = io.BytesIO()
+        Image.new("RGB", (300, 400), "gray").save(stream, format="PNG")
+        self.provider.return_value = model_result(document_type="portrait", photo_portrait_count="multiple",
+            photo_layout="photo_sheet", photo_criteria={key: "pass" for key in checks.PHOTO_CRITERIA})
+        response = self.submit("identity_photo", data=stream.getvalue(), filename="planche.png")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["status"], "warning")
+        signer = checks.URLSafeTimedSerializer(self.app.secret_key, salt="document-analysis-v1")
+        receipt = signer.loads(response.json["receipt"])
+        self.assertEqual(receipt["result"]["status"], "warning")
+        self.assertEqual(receipt["kind"], "identity_photo")
 
     def test_rate_counter_is_atomic_across_concurrent_requests(self):
         # Initialise the table before simultaneous reservations.

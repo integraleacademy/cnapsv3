@@ -27,6 +27,15 @@ Sur la page de remplacement, les anciens documents conservés ne sont pas réana
 sur le dossier existant évite de présenter une face déjà transmise comme manquante.
 
 La photo est contrôlée selon les critères visibles et reçoit un message positif court.
+Le modèle compte les occurrences de portraits dans l'image entière, y compris les copies du
+même visage, et identifie séparément les planches et montages. Le serveur exige explicitement
+un seul portrait et une photo individuelle isolée avant tout résultat positif. Une planche
+avec des cases vides reste une planche, même si un seul portrait subsiste. Ces observations
+priment sur une liste de critères photographiques éventuellement positive ; un doute ne peut
+pas produire de voyant vert. Le résultat positif porte la version de ce contrôle.
+Les anciens résultats positifs de photos, y compris les reçus encore en circulation, sont
+présentés comme non concluants : ils n'établissaient pas l'absence de planche. L'historique
+en base et les décisions humaines de conformité restent inchangés.
 L’attestation est examinée pour la présence visuelle de la signature de l’hébergeant ; cette
 observation ne certifie pas l’authenticité de la signature.
 

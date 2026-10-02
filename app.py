@@ -2888,7 +2888,7 @@ def request_documents(request_id):
     grouped = {}
     for d in docs:
         document = dict(d)
-        document["auto_analysis"] = admin_analysis(document.get("auto_analysis_json"))
+        document["auto_analysis"] = admin_analysis(document.get("auto_analysis_json"), document["doc_type"])
         grouped.setdefault(d["doc_type"], []).append(document)
 
     present_doc_types = {d["doc_type"] for d in docs}
