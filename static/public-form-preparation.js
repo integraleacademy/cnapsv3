@@ -31,8 +31,10 @@
       formInput.checked = profile.checked;
       formInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    // Instructions for every situation stay visible; selection only adapts the checklist/form.
-    guide.querySelector(`[data-prep-extra="${profile.dataset.prepProfile}"]`).classList.toggle('is-applicable', profile.checked);
+    const extra = guide.querySelector(`[data-prep-extra="${profile.dataset.prepProfile}"]`);
+    extra.classList.toggle('is-applicable', profile.checked);
+    extra.querySelector('[data-prep-details]').hidden = !profile.checked;
+    profile.setAttribute('aria-expanded', String(profile.checked));
     profile.closest('.prep-profile').classList.toggle('is-selected', profile.checked);
     const hosted = document.getElementById('prep-heberge').checked;
     guide.querySelector('[data-prep-address-owner]').textContent = hosted

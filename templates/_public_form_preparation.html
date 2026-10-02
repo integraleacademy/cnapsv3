@@ -76,31 +76,35 @@
   </section>
 
   <section class="prep-situation" aria-labelledby="prep-situation-title">
-    <div class="prep-section-heading"><div><span class="prep-eyebrow">LES DOCUMENTS SELON VOTRE SITUATION</span><h2 id="prep-situation-title">Hébergé(e), non français(e)… On vous explique.</h2><p>Retrouvez directement les pièces à prévoir dans chacun de ces cas. Les deux situations peuvent se cumuler.</p></div></div>
+    <div class="prep-section-heading"><div><span class="prep-eyebrow">LES DOCUMENTS SELON VOTRE SITUATION</span><h2 id="prep-situation-title">Hébergé(e), non français(e)… On vous explique.</h2><p>Cochez les situations qui vous concernent pour afficher les documents à préparer. Les deux situations peuvent se cumuler.</p></div></div>
     <section id="prep-host" class="prep-extra prep-case prep-case-host" data-prep-extra="heberge" aria-labelledby="prep-host-title">
       <div class="prep-case-intro">
         <img class="prep-case-image" src="{{ url_for('static', filename='illustrations/prepare-hosting.webp', v='manual-2') }}" alt="Une personne qui héberge un candidat signe son attestation, avec sa facture et sa pièce d’identité sur la table." width="960" height="640" loading="lazy" decoding="async">
         <div class="prep-case-copy"><span class="prep-eyebrow">CHEZ VOS PARENTS, UN PROCHE OU UN AMI</span><h3 id="prep-host-title">Vous êtes hébergé(e) ?</h3><p>Le justificatif n’est pas à votre nom ? Préparez <strong>ces 3 éléments avec la personne qui vous héberge</strong>, en plus de votre propre pièce d’identité et de votre photo.</p>
-          <label class="prep-profile"><input type="checkbox" id="prep-heberge" data-prep-profile="heberge" {% if fd.get('heberge') == 'on' %}checked{% endif %}>{{ prep_icon('home') }}<span><strong>Oui, je suis hébergé(e)</strong><small>Adapter ma checklist et mon formulaire.</small></span></label>
+          <label class="prep-profile"><input type="checkbox" id="prep-heberge" data-prep-profile="heberge" aria-controls="prep-host-documents" aria-expanded="{{ 'true' if fd.get('heberge') == 'on' else 'false' }}" {% if fd.get('heberge') == 'on' %}checked{% endif %}>{{ prep_icon('home') }}<span><strong>Oui, je suis hébergé(e)</strong><small>Afficher les pièces à préparer et adapter mon formulaire.</small></span></label>
         </div>
       </div>
+      <div id="prep-host-documents" data-prep-details {% if fd.get('heberge') != 'on' %}hidden{% endif %}>
       <div class="prep-extra-grid prep-host-documents">
         <article><span class="prep-case-step">1</span><h4>Son justificatif de domicile</h4><p><strong>Moins de 3 mois</strong>, au nom de l’hébergeant, à l’adresse où vous résidez. Facture d’eau, gaz, électricité, téléphone fixe seul ou quittance de loyer.</p><span class="prep-format">PDF · 5 Mo max</span><p class="prep-replacement-note">Il remplace le justificatif à votre nom dans la rubrique « Justificatif de domicile ».</p></article>
         <article data-prep-card><span class="prep-case-step">2</span><h4>Sa pièce d’identité</h4><p>Carte d’identité ou titre de séjour de l’hébergeant : <strong>recto et verso</strong>, dans un ou deux PDF. Ou passeport : page d’identité avec photo.</p><span class="prep-format">PDF · 5 Mo max / fichier</span><label class="prep-ready"><input type="checkbox" data-prep-ready="host_identity"><span>Sa pièce d’identité est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
         <article data-prep-card><span class="prep-case-step">3</span><h4>Son attestation d’hébergement</h4><p>Une attestation complétée et <strong>signée par la personne qui vous héberge</strong>. Pensez à vérifier que la signature est bien visible.</p><span class="prep-format">PDF · 5 Mo max</span><a class="prep-text-link" href="https://www.service-public.gouv.fr/simulateur/calcul/AttestationHebergement" target="_blank" rel="noopener">Utiliser le modèle Service Public <span aria-hidden="true">↗</span></a><label class="prep-ready"><input type="checkbox" data-prep-ready="hosting_certificate"><span>L’attestation signée est prête</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
       </div>
       <p class="prep-case-reminder"><strong>À retenir :</strong> une facture au nom de votre parent ou de votre proche ne suffit pas seule. Ajoutez sa pièce d’identité et son attestation signée.</p>
+      </div>
     </section>
     <section id="prep-foreign" class="prep-extra prep-case prep-case-foreign" data-prep-extra="non_francais" aria-labelledby="prep-foreign-title">
       <div class="prep-case-intro">
         <img class="prep-case-image" src="{{ url_for('static', filename='illustrations/prepare-foreign.webp', v='manual-2') }}" alt="Un candidat et une conseillère vérifient ensemble des justificatifs et un diplôme pour compléter le dossier." width="960" height="640" loading="lazy" decoding="async">
         <div class="prep-case-copy"><span class="prep-eyebrow">LES PIÈCES COMPLÉMENTAIRES</span><h3 id="prep-foreign-title">Vous n’avez pas la nationalité française ?</h3><p>Préparez également <strong>les 2 justificatifs ci-dessous</strong>. Ils s’ajoutent aux documents de base et, si vous êtes hébergé(e), aux pièces d’hébergement.</p>
-          <label class="prep-profile"><input type="checkbox" id="prep-non-francais" data-prep-profile="non_francais" {% if fd.get('non_francais') == 'on' %}checked{% endif %}>{{ prep_icon('globe') }}<span><strong>Je n’ai pas la nationalité française</strong><small>Adapter ma checklist et mon formulaire.</small></span></label>
+          <label class="prep-profile"><input type="checkbox" id="prep-non-francais" data-prep-profile="non_francais" aria-controls="prep-foreign-documents" aria-expanded="{{ 'true' if fd.get('non_francais') == 'on' else 'false' }}" {% if fd.get('non_francais') == 'on' %}checked{% endif %}>{{ prep_icon('globe') }}<span><strong>Je n’ai pas la nationalité française</strong><small>Afficher les pièces à préparer et adapter mon formulaire.</small></span></label>
         </div>
       </div>
+      <div id="prep-foreign-documents" data-prep-details {% if fd.get('non_francais') != 'on' %}hidden{% endif %}>
       <div class="prep-extra-grid">
         <article data-prep-card><span class="prep-case-step">1</span><h4>Le casier judiciaire du pays de naissance</h4><p>Un document daté de <strong>moins de 3 mois</strong> et <strong>traduit en français</strong>.</p><span class="prep-format">PDF · 5 Mo max</span><label class="prep-ready"><input type="checkbox" data-prep-ready="criminal_record"><span>Mon casier judiciaire est prêt</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
         <article data-prep-card><span class="prep-case-step">2</span><h4>Le diplôme français ou le test TCF officiel</h4><p>Un <strong>diplôme français supérieur au brevet</strong> ou un <strong>test TCF officiel de moins de 2 ans</strong>.</p><span class="prep-format">PDF · 5 Mo max</span><label class="prep-ready"><input type="checkbox" data-prep-ready="french_diploma_tcf"><span>Mon diplôme ou mon test est prêt</span><span class="prep-ready-tick" aria-hidden="true">✓</span></label></article>
+      </div>
       </div>
     </section>
   </section>
@@ -120,5 +124,5 @@
     <div><span class="prep-eyebrow">03 / À VOUS DE JOUER</span><h2 data-prep-finish-title>Vos documents sont prêts ?</h2><p>Vous pourrez revoir ce guide pendant la saisie.</p><small>La checklist vous aide à vous organiser ; elle ne valide pas les documents.</small></div>
     <a class="prep-start-button" href="{{ url_for('public_form', etape='formulaire') }}#public-form-title" data-prep-start>J’ai mes documents, je commence {{ prep_icon('arrow') }}</a>
   </div>
-  <noscript><style>.prep-profile,.prep-ready,.prep-progress{display:none!important}</style><p class="prep-noscript">Consultez les pièces correspondant à votre situation, puis cliquez sur « J’ai mes documents, je commence ». Vous indiquerez votre situation dans le formulaire.</p></noscript>
+  <noscript><style>.prep-profile,.prep-ready,.prep-progress{display:none!important}.prep-case [data-prep-details][hidden]{display:block!important}</style><p class="prep-noscript">Consultez les pièces correspondant à votre situation, puis cliquez sur « J’ai mes documents, je commence ». Vous indiquerez votre situation dans le formulaire.</p></noscript>
 </section>
