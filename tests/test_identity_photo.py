@@ -152,6 +152,45 @@ class IdentityPhotoTests(unittest.TestCase):
                 self.assertIsNone(analysis.submitted_analysis(FileStorage(stream=stream), kind))
                 self.assertEqual(stream.tell(), 0)
 
+    def test_old_positive_photo_receipt_is_saved_as_inconclusive(self):
+        data = self.payload()
+        data['document_analysis_receipts'] = self.receipt(data['identity_photo'][0].getvalue(), 'identity_photo',
+            {'status': 'success', 'title': 'Photo : c’est bon !', 'message': ''})
+        self.submit(data)
+        photo = self.rows("SELECT * FROM request_documents WHERE doc_type='identity_photo'")[0]
+        self.assertEqual(json.loads(photo['auto_analysis_json'])['status'], 'unknown')
+        self.assertIsNone(photo['is_conforme'])
+        self.assertEqual(photo['review_status'], 'pending')
+
+    def test_old_photo_green_badge_is_removed_without_changing_stored_review(self):
+        request_id = self.create_request()
+        old_result = json.dumps({'status': 'success', 'message': '', 'checked_at': '2026-10-02T14:43:00+02:00'})
+        with sqlite3.connect(cnaps_app.DB_NAME) as conn:
+            conn.execute("UPDATE request_documents SET auto_analysis_json=?, is_conforme=1, review_status='conforme' WHERE doc_type='identity_photo'", (old_result,))
+        html = self.admin.get(f'/a-traiter/{request_id}/documents').get_data(as_text=True)
+        self.assertNotIn('Document vérifié · Tout semble OK', html)
+        self.assertIn('Vérification non concluante', html)
+        self.assertIn('L’ancien contrôle ne vérifiait pas explicitement les planches', html)
+        photo = self.rows("SELECT * FROM request_documents WHERE doc_type='identity_photo'")[0]
+        self.assertEqual(photo['auto_analysis_json'], old_result)
+        self.assertEqual(photo['is_conforme'], 1)
+        self.assertEqual(photo['review_status'], 'conforme')
+        self.email.reset_mock()
+        self.sms.reset_mock()
+        self.admin.get(f'/a-traiter/{request_id}/documents')
+        self.email.assert_not_called()
+        self.sms.assert_not_called()
+
+    def test_current_positive_photo_receipt_keeps_green_badge(self):
+        data = self.payload()
+        data['document_analysis_receipts'] = self.receipt(data['identity_photo'][0].getvalue(), 'identity_photo',
+            {'status': 'success', 'message': '', 'photo_check_version': analysis.PHOTO_CHECK_VERSION})
+        self.submit(data)
+        photo = self.rows("SELECT * FROM request_documents WHERE doc_type='identity_photo'")[0]
+        self.assertEqual(json.loads(photo['auto_analysis_json'])['status'], 'success')
+        html = self.admin.get(f'/a-traiter/{photo["request_id"]}/documents').get_data(as_text=True)
+        self.assertIn('Document vérifié · Tout semble OK', html)
+
     def test_initial_deposit_keeps_missing_verso_alert_despite_readable_file(self):
         data = self.payload()
         result = {"status": "success", "message": "Fichier lisible", "identity_evidence": [

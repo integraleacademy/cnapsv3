@@ -48,8 +48,9 @@ ADDRESS_KINDS = ["water", "rent_receipt", "gas", "electricity", "gas_electricity
                  "landline", "mobile", "internet", "mixed_telecom", "other", "uncertain"]
 ACCEPTED_ADDRESS_KINDS = set(ADDRESS_KINDS[:7])
 CHECK_VALUES = ["pass", "fail", "uncertain", "not_applicable"]
+PHOTO_CHECK_VERSION = 2
 PHOTO_CRITERIA = {
-    "single_portrait": "une seule personne, sur une véritable photo de portrait",
+    "single_portrait": "un seul portrait dans tout le fichier, sans planche ni montage de plusieurs photos, même de la même personne",
     "sharp_and_well_lit": "une photo nette, bien éclairée, sans ombre ni reflet gênant",
     "front_facing_and_centered": "la tête droite, de face et bien cadrée",
     "neutral_expression": "une expression neutre et la bouche fermée",
@@ -73,6 +74,8 @@ SCHEMA = {
         "all_fields_legible": {"type": "boolean"},
         "problems": {"type": "array", "items": {"type": "string", "enum": PROBLEMS}},
         "photo_criteria": PHOTO_SCHEMA,
+        "photo_portrait_count": {"type": "string", "enum": ["none", "one", "multiple", "uncertain", "not_applicable"]},
+        "photo_layout": {"type": "string", "enum": ["single_photo", "photo_sheet", "collage", "identity_document", "screenshot", "other", "uncertain", "not_applicable"]},
         "signature": {"type": "string", "enum": ["present", "absent", "uncertain", "not_applicable"]},
         "signature_confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "address_kind": {"type": "string", "enum": ADDRESS_KINDS},
@@ -168,8 +171,22 @@ N'identifie pas la personne et ne compare pas les visages. Hors pièce d'identit
 identity_document not_applicable, identity_sides vide, side_confidence low, tous identity_checks not_applicable.
 
 PHOTO D'IDENTITÉ : ne reconnais pas la personne et ne déduis aucun attribut personnel.
+Examine d'abord LE FICHIER ENTIER, sans sélectionner ou recadrer mentalement un portrait.
+Dans photo_portrait_count, compte les occurrences de portraits visibles, PAS les personnes
+différentes : trois tirages du même visage = multiple, jamais one. Un portrait partiel compte
+aussi. Une planche dont un emplacement est vide et trois portraits restent visibles = multiple.
+Dans photo_layout : single_photo seulement pour un portrait individuel déjà isolé et cadré ;
+photo_sheet pour une planche de photomaton/photographe, même agréée, même s'il ne reste qu'un
+portrait ; collage pour un montage ; identity_document pour une pièce d'identité photographiée ;
+screenshot si une interface/capture est visible ; other si aucun de ces cas ; uncertain si doute.
+Le logo du ministère, un code ePhoto ou la mention « conforme » ne rendent PAS une planche
+acceptable. Toute planche ou tout montage doit avoir single_portrait fail. Plusieurs portraits
+doivent avoir photo_portrait_count multiple et single_portrait fail, même s'ils sont identiques.
+Un seul portrait sur une feuille avec cases vides, texte, code ou bordures de planche n'est PAS
+une photo déjà isolée : photo_sheet et single_portrait fail. N'évalue pas seulement le visage
+le mieux cadré : le fond et le cadrage concernent l'ensemble du fichier transmis.
 Pour une photo de portrait, document_type portrait. Évalue chacun des critères photo_criteria
-sur les seuls éléments visibles : une seule personne réelle photographiée (pas un dessin, logo,
+sur les seuls éléments visibles : un seul portrait réel dans tout le fichier (pas un dessin, logo,
 document d'identité ou capture d'écran), netteté et éclairage homogène sans ombre gênante,
 tête droite de face centrée avec le visage entier, expression neutre bouche fermée,
 yeux ouverts visibles sans reflets ni verres teintés, tête nue et visage dégagé,
@@ -178,7 +195,10 @@ ou de capture d'écran, sans prétendre détecter toute manipulation. Un portrai
 sans signe visible de ces défauts peut obtenir pass pour no_visible_filter_or_capture.
 Utilise fail pour un défaut visible, uncertain si un critère est impossible à apprécier.
 N'invente pas l'ancienneté, les dimensions physiques ou l'origine agréée de la photo :
-ces éléments ne sont pas vérifiables ici. Pour tout autre type, photo_criteria = not_applicable.
+ces éléments ne sont pas vérifiables ici. Pour un fichier déposé comme photo d'identité, renseigne
+toujours photo_portrait_count et photo_layout, même si document_type n'est pas portrait.
+Pour les autres types de dépôt, photo_portrait_count et photo_layout = not_applicable.
+Pour tout autre type de document, photo_criteria = not_applicable.
 
 ATTESTATION D'HÉBERGEMENT : vérifie toutes les pages, particulièrement la zone de signature
 de l'hébergeant. Une signature manuscrite visible ou un bloc de signature électronique visible
@@ -242,6 +262,18 @@ def check_schema(result):
 def advisory(result, kind, today):
     """Fixed messages, with date arithmetic performed by the server, not the model."""
     result = check_schema(result)
+    if kind == "identity_photo":
+        # Separate composition observations veto an otherwise positive portrait
+        # checklist (including repeated prints of the same person).
+        if result["photo_portrait_count"] == "multiple" or result["photo_layout"] in {"photo_sheet", "collage"}:
+            return {"status": "warning", "title": "Une seule photo d’identité est nécessaire", "message":
+                    "Ce fichier semble contenir une planche ou plusieurs portraits, même s’il s’agit de la même personne. "
+                    "Déposez une seule photo d’identité, recadrée autour d’un seul portrait, sans les autres photos, "
+                    "les cases vides, le texte ni les bordures de la planche. Vous pouvez aussi demander le fichier individuel à votre photographe.",
+                    "critical": "Une planche de photos ne peut pas être utilisée comme photo d’identité dans ce formulaire."}
+        if result["photo_portrait_count"] == "none" or result["photo_layout"] in {"identity_document", "screenshot", "other"}:
+            return {"status": "warning", "title": "Une photo d’identité est nécessaire", "message":
+                    "Déposez le fichier d’une seule photo de votre visage, de face, sur fond neutre, sans capture d’écran ni photographie d’une pièce d’identité."}
     expected = {"proof_address": "address", "identity_photo": "portrait",
                 "hosting_certificate": "hosting_certificate"}.get(kind, "identity")
     if result["document_type"] != expected:
@@ -256,9 +288,12 @@ def advisory(result, kind, today):
             return {"status": "warning", "title": "Photo à remplacer", "message":
                     "Votre photo semble ne pas respecter certains critères. Il faut : " + "; ".join(failed) + ". Souhaitez-vous la remplacer ?",
                     "critical": "Une photo non conforme entraînera le rejet de votre dossier lors du contrôle de conformité."}
-        if result["confidence"] != "high" or any(value != "pass" for value in result["photo_criteria"].values()):
+        if (result["confidence"] != "high" or result["photo_portrait_count"] != "one"
+                or result["photo_layout"] != "single_photo"
+                or any(value != "pass" for value in result["photo_criteria"].values())):
             return unavailable(kind)
-        return {"status": "success", "title": "Photo : c’est bon !", "message": ""}
+        return {"status": "success", "title": "Photo : c’est bon !", "message": "",
+                "photo_check_version": PHOTO_CHECK_VERSION}
     if kind == "hosting_certificate":
         if result["signature"] == "absent" and result["signature_confidence"] == "high" and result["confidence"] == "high":
             return {"status": "warning", "title": "Signature non repérée", "message":
@@ -468,6 +503,7 @@ Si la page montre les deux faces, renvoie front et back. Sinon n'invente pas la 
 Ne reconnais pas la personne et ne compare pas les visages.
 Renvoie le schéma demandé. Pour les champs hors sujet : document_date null, date_kind
 uncertain, date_confidence low, photo_criteria tous not_applicable, signature not_applicable,
+photo_portrait_count not_applicable, photo_layout not_applicable,
 signature_confidence low, address_kind uncertain, address_kind_confidence low.
 Si ce n'est pas une pièce d'identité, identity_document not_applicable, identity_sides vide,
 side_confidence low et identity_checks tous not_applicable.
@@ -587,15 +623,28 @@ def submitted_analysis(upload, kind):
             continue
         if (saved.get("file_hash") == digest and saved.get("kind") == kind
                 and saved.get("session_hash") == session_hash):
-            return json.dumps({"checked_at": saved["checked_at"], **saved["result"]}, ensure_ascii=False)
+            result = current_photo_analysis(saved["result"]) if kind == "identity_photo" else saved["result"]
+            return json.dumps({"checked_at": saved["checked_at"], **result}, ensure_ascii=False)
     return None
 
 
-def admin_analysis(raw):
+def current_photo_analysis(result):
+    """Legacy green checks did not establish that the uploaded portrait was isolated."""
+    if result.get("status") == "success" and result.get("photo_check_version") != PHOTO_CHECK_VERSION:
+        return {**result, "status": "unknown", "title": "Photo à vérifier", "message":
+                "L’ancien contrôle ne vérifiait pas explicitement les planches de photos. "
+                "Vérifiez que ce fichier contient une seule photo d’identité isolée, sans autres portraits, "
+                "cases vides, texte ni bordures de planche."}
+    return result
+
+
+def admin_analysis(raw, kind=None):
     try:
         result = json.loads(raw or "null")
         if not isinstance(result, dict) or result.get("status") not in {"success", "warning", "unknown", "info"}:
             return {"status": "unchecked"}
+        if kind == "identity_photo":
+            result = current_photo_analysis(result)
         result["checked_label"] = datetime.fromisoformat(result["checked_at"]).astimezone(FRANCE_TZ).strftime("%d/%m/%Y à %H:%M")
         return result
     except (ValueError, TypeError, KeyError):
