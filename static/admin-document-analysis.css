@@ -14,3 +14,10 @@
 .auto-check-note{font-size:11px!important;color:#64748b!important;margin:6px 2px 0;font-weight:400}
 .dossier-photo-overview .auto-check{margin:10px 0}
 @media(max-width:600px){.doc-heading{gap:10px}.doc-heading>.auto-check{flex-basis:100%}.auto-check-badge{font-size:12px}}
+.auto-check-retry { margin-top: 8px; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; }
+.auto-check-retry:disabled { opacity: .65; cursor: wait; }
+.auto-check-progress { margin: 6px 0 0; font-size: 13px; color: #64748b; }
+.auto-check-progress:empty { display: none; }
+.doc-heading > [id^="analysis-result-"] { flex: 0 1 420px; max-width: 100%; }
+.doc-heading > .auto-check-progress { flex-basis: 100%; }
+@media(max-width:600px) { .doc-heading > [id^="analysis-result-"] { flex-basis: 100%; } }

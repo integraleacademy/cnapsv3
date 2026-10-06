@@ -28,6 +28,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PAGES = 4
+MAX_ADDRESS_PAGES = 12
 KIND_LABELS = {
     "identity": "pièce d'identité du candidat",
     "host_identity": "pièce d'identité de la personne qui héberge le candidat",
@@ -392,14 +393,14 @@ def render_photo(data):
                 return [base64.b64encode(stream.getvalue()).decode("ascii")]
 
 
-def render_pages(data, max_dimension=2400):
+def render_pages(data, max_dimension=2400, max_pages=MAX_PAGES):
     """Send visible pixels only: an invisible PDF text layer cannot prove legibility."""
     if not data.startswith(b"%PDF-"):
         raise ValueError("invalid_pdf")
     images = []
     with _pdf_lock:
         with pdfium.PdfDocument(data) as pdf:
-            if not 1 <= len(pdf) <= MAX_PAGES:
+            if not 1 <= len(pdf) <= max_pages:
                 raise ValueError("page_limit")
             pdf.init_forms()
             for number in range(len(pdf)):
@@ -679,6 +680,55 @@ def record_identity_group_alerts(conn, request_id):
             conn.execute("UPDATE request_documents SET auto_analysis_json = ? WHERE id = ?", (json.dumps(result, ensure_ascii=False), document_id))
 
 
+def analysis_failure(kind, reason):
+    """Keep a useful, non-sensitive explanation with unsuccessful attempts."""
+    explanations = {
+        "page_limit": f"Le PDF dépasse la limite de {MAX_ADDRESS_PAGES if kind == 'proof_address' else MAX_PAGES} pages analysables.",
+        "invalid_pdf": "Le fichier n’a pas pu être lu comme un PDF.",
+        "invalid_page": "Une page du PDF n’a pas pu être rendue.",
+        "timeout": "Le service d’analyse n’a pas répondu dans le délai prévu.",
+        "busy": "Le service d’analyse était occupé. Vous pouvez relancer la vérification.",
+        "quota": "La limite temporaire de vérifications a été atteinte.",
+        "not_configured": "Le service de vérification automatique n’était pas configuré.",
+        "incomplete_response": "Le service d’analyse a renvoyé une réponse incomplète.",
+        "invalid_result": "Le service d’analyse a renvoyé un résultat inexploitable.",
+        "refusal": "Le service d’analyse n’a pas pu examiner ce document.",
+        "file_unavailable": "Le fichier enregistré n’a pas pu être ouvert pour la vérification.",
+    }
+    return {**unavailable(kind), "reason_code": reason,
+            "critical": explanations.get(reason, "Une erreur technique a interrompu l’analyse. Vous pouvez relancer la vérification.")}
+
+
+def analyze_document_bytes(data, kind, db_path, token):
+    """Shared by the public preview and authenticated checks of saved documents."""
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return analysis_failure(kind, "not_configured"), 200
+    if not _slots.acquire(blocking=False):
+        return analysis_failure(kind, "busy"), 429
+    try:
+        images = render_photo(data) if kind == "identity_photo" else render_pages(
+            data, max_dimension=3200 if kind in {"identity", "host_identity"} else 2400,
+            max_pages=MAX_ADDRESS_PAGES if kind == "proof_address" else MAX_PAGES)
+        units = len(images) if kind in {"identity", "host_identity"} else 1
+        if not reserve_usage(db_path, token, time.time(), units=units):
+            return analysis_failure(kind, "quota"), 429
+        return analyze_images(images, kind, api_key, datetime.now(FRANCE_TZ).date()), 200
+    except Exception as error:
+        # Only known internal codes may be logged, never provider text or document data.
+        safe_codes = {"page_limit", "invalid_pdf", "invalid_page", "invalid_photo", "photo_pixel_limit",
+                      "response_limit", "incomplete_response", "invalid_result", "refusal", "identity_requires_one_page"}
+        reason = str(error) if isinstance(error, ValueError) and str(error) in safe_codes else "technical_error"
+        if isinstance(error, TimeoutError):
+            reason = "timeout"
+        elif isinstance(error, HTTPError):
+            reason = f"http_{error.code}"
+        current_app.logger.warning("document_analysis_unavailable kind=%s reason=%s", kind, reason)
+        return analysis_failure(kind, reason), 200
+    finally:
+        _slots.release()
+
+
 def register_document_analysis(app, db_path):
     def form_token():
         if not session.get("document_analysis_token"):
@@ -689,7 +739,8 @@ def register_document_analysis(app, db_path):
 
     @app.after_request
     def protect_analysis_cache(response):
-        if request.path == "/public-form" or request.path.startswith(("/replace-documents/", "/api/document-analysis")):
+        if (request.path == "/public-form" or request.path.startswith(("/replace-documents/", "/api/document-analysis"))
+                or (request.path.startswith("/a-traiter/") and "/documents" in request.path)):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -708,9 +759,6 @@ def register_document_analysis(app, db_path):
             kind = request.form.get("kind", "")
             if kind not in KINDS:
                 return jsonify(unavailable(kind)), 400
-            api_key = os.getenv("OPENAI_API_KEY", "").strip()
-            if not api_key:
-                return jsonify(unavailable(kind))
             upload = request.files.get("document")
             extensions = (".jpg", ".jpeg", ".png") if kind == "identity_photo" else (".pdf",)
             if not upload or not upload.filename.lower().endswith(extensions):
@@ -725,23 +773,16 @@ def register_document_analysis(app, db_path):
                 cached = _cache.get(key)
                 if cached and now - cached[0] < 600:
                     return jsonify(cached[1])
-            if not _slots.acquire(blocking=False):
-                return jsonify(unavailable(kind)), 429
-            try:
-                images = render_photo(data) if kind == "identity_photo" else render_pages(data, max_dimension=3200 if kind in {"identity", "host_identity"} else 2400)
-                units = len(images) if kind in {"identity", "host_identity"} else 1
-                if not reserve_usage(db_path(), token, now, units=units):
-                    return jsonify(unavailable(kind)), 429
-                result = analyze_images(images, kind, api_key, today)
-                result = {**result, "receipt": analysis_receipt(result, data, kind)}
+            result, status = analyze_document_bytes(data, kind, db_path(), token)
+            # An unsuccessful attempt must be saved too, instead of becoming "unchecked".
+            result = {**result, "receipt": analysis_receipt(result, data, kind)}
+            if not result.get("reason_code"):
                 with _cache_lock:
                     _cache[key] = (now, result)
                     _cache.move_to_end(key)
                     while len(_cache) > 128:
                         _cache.popitem(last=False)
-                return jsonify(result)
-            finally:
-                _slots.release()
+            return jsonify(result), status
         except RequestEntityTooLarge:
             return jsonify(unavailable(kind)), 413
         except Exception as error:

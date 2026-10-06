@@ -59,7 +59,8 @@ Le serveur utilise Responses avec `store=false`, sans Files API. Aucun fichier n
 par cette vérification. Le dépôt habituel n’enregistre les documents qu’à l’envoi du formulaire.
 Ne pas journaliser les corps des requêtes/réponses du fournisseur ni les documents.
 
-Limites : 5 Mo par fichier, 4 pages par PDF, 2 analyses simultanées par processus,
+Limites : 5 Mo par fichier, 12 pages par justificatif de domicile (toutes analysées),
+4 pages par autre PDF, 2 analyses simultanées par processus,
 30 appels réservés par session/heure, 600 par jour pour le service. Les compteurs SQLite
 ne contiennent pas les documents. Cache en mémoire de 10 minutes (128 entrées maximum).
 Pas de relance automatique ; délai réseau de 25 secondes, navigateur 35 secondes.
@@ -67,6 +68,16 @@ Les threads Gunicorn maintiennent le formulaire disponible pendant l’analyse. 
 protège PDFium, qui n’est pas compatible avec des appels simultanés entre threads.
 
 Une erreur, une limite ou une clé absente conserve toujours la possibilité de poursuivre.
+L’échec d’une tentative sur un fichier recevable reçoit aussi un reçu signé lié au fichier
+et à la session. Son motif technique est conservé au dépôt sous « Vérification non concluante ».
+Les logs indiquent seulement le type de pièce et un code d’erreur interne autorisé.
+
+Dans l’administration, ouvrir un dossier relance une fois le contrôle des justificatifs de
+domicile sans résultat. Le bouton « Relancer la vérification » permet une nouvelle tentative
+sur tout type de pièce pris en charge, à partir du fichier enregistré. L’appel exige la
+session administrateur et un jeton anti-CSRF. Un résultat existant n’est pas relancé
+automatiquement ; un document remplacé pendant l’analyse ne reçoit pas un résultat périmé.
+Ces contrôles ne changent jamais la décision humaine de conformité et n’envoient aucun mail.
 
 Tests : `python -m unittest discover -s tests` et `node --test tests/*.test.mjs`.
 Utiliser `CNAPS_DB_PATH` et `CNAPS_UPLOAD_DIR` temporaires. Ne jamais créer de demande réelle

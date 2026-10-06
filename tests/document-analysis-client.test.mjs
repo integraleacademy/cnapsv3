@@ -5,6 +5,19 @@ import { unavailableMessage } from '../static/document-check-rules.mjs';
 
 const file = () => new File(['%PDF-1.4 specimen'], 'specimen.pdf', { type: 'application/pdf' });
 
+test('a signed unsuccessful attempt survives a rate limit for persistence at deposit', async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, json: async () => ({
+    status: 'unknown', message: 'Limite temporaire atteinte', receipt: 'signed-server-receipt',
+  }) });
+  try {
+    const result = await analyzeDocument(file(), 'proof_address', '', { token: 'token' });
+    assert.equal(result.receipt, 'signed-server-receipt');
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({ status: 'unknown', message: 'Unauthorized' }) });
+    await assert.rejects(analyzeDocument(file(), 'proof_address', '', { token: 'token' }));
+  } finally { globalThis.fetch = previous; }
+});
+
 test('analysis sends the document only to the same-origin endpoint with the form token', async () => {
   const previous = globalThis.fetch;
   globalThis.fetch = async (url, options) => {

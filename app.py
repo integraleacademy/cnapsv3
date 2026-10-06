@@ -17,13 +17,15 @@ from email.message import EmailMessage
 import smtplib
 from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 import json
 import re
 import hmac
 import logging
 import warnings
 from PIL import Image, UnidentifiedImageError
-from document_analysis import register_document_analysis, submitted_analysis, admin_analysis, record_identity_group_alerts
+from document_analysis import (register_document_analysis, submitted_analysis, admin_analysis,
+                               record_identity_group_alerts, analyze_document_bytes, analysis_failure, KINDS)
 from email_history import init_email_history, archive_sent_email, register_email_history, email_preview
 
 
@@ -2935,6 +2937,68 @@ def view_request_email(request_id, email_id):
 def serve_upload(request_id, filename):
     folder = os.path.join(UPLOAD_DIR, str(request_id))
     return send_from_directory(folder, filename, as_attachment=False)
+
+
+@app.post("/a-traiter/<int:request_id>/documents/<int:document_id>/analyze")
+@login_required
+def recheck_request_document(request_id, document_id):
+    token = session.get("document_analysis_token", "")
+    supplied = request.form.get("document_analysis_token", "")
+    if (not token or not hmac.compare_digest(token.encode(), supplied.encode())
+            or request.headers.get("Sec-Fetch-Site") == "cross-site"
+            or (request.headers.get("Origin") and urlsplit(request.headers["Origin"]).netloc != request.host)):
+        abort(403)
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        doc = conn.execute(
+            "SELECT * FROM request_documents WHERE id = ? AND request_id = ? AND is_active = 1",
+            (document_id, request_id),
+        ).fetchone()
+    if not doc or doc["doc_type"] not in KINDS:
+        abort(404)
+
+    def response_for(raw):
+        analysis = admin_analysis(raw, doc["doc_type"])
+        if request.accept_mimetypes.best == "application/json":
+            badge = app.jinja_env.get_template("_admin_document_analysis.html").module.analysis_badge(analysis)
+            response = jsonify({"analysis": analysis, "html": str(badge)})
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        flash("Résultat de la vérification automatique enregistré.", "success")
+        return redirect(url_for("request_documents", request_id=request_id))
+
+    # A second page load must not restart a completed check or overwrite its result.
+    if request.form.get("only_missing") == "1" and admin_analysis(doc["auto_analysis_json"], doc["doc_type"])["status"] != "unchecked":
+        return response_for(doc["auto_analysis_json"])
+    try:
+        base = os.path.realpath(UPLOAD_DIR)
+        path = os.path.realpath(os.path.join(base, doc["storage_path"]))
+        if os.path.commonpath([base, path]) != base:
+            raise ValueError("unsafe_path")
+        with open(path, "rb") as source:
+            data = source.read(MAX_DOCUMENT_SIZE_BYTES + 1)
+        if not data or len(data) > MAX_DOCUMENT_SIZE_BYTES:
+            raise ValueError("invalid_size")
+    except (OSError, ValueError):
+        result = analysis_failure(doc["doc_type"], "file_unavailable")
+    else:
+        # No database write lock is held while rendering or calling the provider.
+        result, _ = analyze_document_bytes(data, doc["doc_type"], DB_NAME, token)
+    saved = json.dumps({**result, "checked_at": datetime.now(FRANCE_TZ).isoformat(timespec="seconds"),
+                        "source": "saved_document"}, ensure_ascii=False)
+    with sqlite3.connect(DB_NAME) as conn:
+        changed = conn.execute(
+            """UPDATE request_documents SET auto_analysis_json = ?
+               WHERE id = ? AND request_id = ? AND is_active = 1 AND stored_name = ?
+               AND auto_analysis_json IS ?""",
+            (saved, document_id, request_id, doc["stored_name"], doc["auto_analysis_json"]),
+        ).rowcount
+    if not changed:
+        abort(409)
+    app.logger.info("document_recheck_completed request_id=%s document_id=%s status=%s reason=%s",
+                    request_id, document_id, result["status"], result.get("reason_code", "none"))
+    # Never change review_status/is_conforme and never send a notification here.
+    return response_for(saved)
 
 
 @app.route("/a-traiter/<int:request_id>/documents/add", methods=["POST"])

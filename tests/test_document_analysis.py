@@ -389,11 +389,49 @@ class EndpointTests(unittest.TestCase):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
             response = self.submit("proof_address")
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json, checks.unavailable("proof_address"))
+            self.assertEqual(response.json["status"], "unknown")
+            self.assertEqual(response.json["reason_code"], "not_configured")
+            self.assertIn("receipt", response.json)
         self.provider.assert_not_called()
         self.provider.side_effect = TimeoutError()
         response = self.submit("host_identity")
-        self.assertEqual(response.json, checks.unavailable("host_identity"))
+        self.assertEqual(response.json["status"], "unknown")
+        self.assertEqual(response.json["reason_code"], "timeout")
+        self.assertIn("receipt", response.json)
+
+    def test_failed_attempt_is_saved_for_exact_file_and_session(self):
+        from werkzeug.datastructures import FileStorage
+        self.provider.side_effect = ValueError("incomplete_response")
+        data = b"%PDF-1.4 specimen"
+        response = self.submit("proof_address", data=data)
+        receipt = response.json["receipt"]
+        with self.app.test_request_context("/public-form", method="POST", data={"document_analysis_receipts": receipt}):
+            checks.session["document_analysis_token"] = "test-session-token"
+            saved = checks.submitted_analysis(FileStorage(stream=io.BytesIO(data)), "proof_address")
+            self.assertEqual(checks.admin_analysis(saved)["status"], "unknown")
+            self.assertEqual(json.loads(saved)["reason_code"], "incomplete_response")
+            self.assertIsNone(checks.submitted_analysis(FileStorage(stream=io.BytesIO(b"replacement")), "proof_address"))
+            checks.session["document_analysis_token"] = "other-session"
+            self.assertIsNone(checks.submitted_analysis(FileStorage(stream=io.BytesIO(data)), "proof_address"))
+
+    def test_errors_are_explained_but_provider_text_is_never_logged(self):
+        self.provider.side_effect = ValueError("private provider response")
+        with self.assertLogs(self.app.logger, level="WARNING") as logs:
+            result = self.submit("proof_address").json
+        self.assertEqual(result["reason_code"], "technical_error")
+        self.assertNotIn("private provider response", " ".join(logs.output))
+        self.provider.side_effect = None
+        self.render.side_effect = ValueError("page_limit")
+        response = self.submit("proof_address")
+        self.assertEqual(response.json["reason_code"], "page_limit")
+        self.assertIn("12 pages", response.json["critical"])
+
+    def test_rate_limit_failure_also_has_a_persistable_receipt(self):
+        with patch.object(checks, "reserve_usage", return_value=False):
+            response = self.submit("proof_address")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json["reason_code"], "quota")
+        self.assertIn("receipt", response.json)
 
     def test_results_are_cached_without_storing_documents_or_changing_dossiers(self):
         first = self.submit()

@@ -7,7 +7,7 @@
   <title>Gérer les documents</title>
   <link rel="icon" href="{{ url_for('static', filename='faviconcnaps.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='identity-photo.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='admin-document-analysis.css', v='1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin-document-analysis.css', v='2') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='email-history.css', v='1') }}">
   <style>
     :root {
@@ -548,7 +548,13 @@
           <div class="doc">
             <div class="doc-heading">
               <a class="doc-link" href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener">{{ d.original_name }}</a>
-              {{ analysis_badge(d.auto_analysis) }}
+              <div id="analysis-result-{{ d.id }}">{{ analysis_badge(d.auto_analysis) }}</div>
+              {% if doc_type in ['identity', 'host_identity', 'identity_photo', 'proof_address', 'hosting_certificate'] %}
+                <button type="submit" class="auto-check-retry" form="analyze-document-{{ d.id }}">
+                  {{ 'Lancer la vérification' if d.auto_analysis.status == 'unchecked' else 'Relancer la vérification' }}
+                </button>
+                <p class="auto-check-progress" id="analysis-progress-{{ d.id }}" role="status" aria-live="polite"></p>
+              {% endif %}
             </div>
             {% if doc_type == 'identity_photo' %}
               <a href="/uploads/{{ req.id }}/{{ d.stored_name }}" target="_blank" rel="noopener" aria-label="Ouvrir la photo d'identité en taille réelle">
@@ -599,6 +605,14 @@
 
     {% for doc_type, docs in grouped.items() %}
       {% for d in docs %}
+        {% if doc_type in ['identity', 'host_identity', 'identity_photo', 'proof_address', 'hosting_certificate'] %}
+          <form id="analyze-document-{{ d.id }}" method="post"
+                action="{{ url_for('recheck_request_document', request_id=req.id, document_id=d.id) }}"
+                data-saved-document-check="{{ d.id }}"
+                {% if doc_type == 'proof_address' and d.auto_analysis.status == 'unchecked' %}data-check-missing{% endif %}>
+            <input type="hidden" name="document_analysis_token" value="{{ document_analysis_token() }}">
+          </form>
+        {% endif %}
         <form
           id="replace-document-{{ d.id }}"
           method="post"
@@ -683,5 +697,6 @@
   </script>
   <script src="{{ url_for('static', filename='identity-photo.js') }}"></script>
   <script type="module" src="{{ url_for('static', filename='email-history.mjs', v='1') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='admin-document-analysis.mjs', v='1') }}"></script>
 </body>
 </html>

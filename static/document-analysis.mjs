@@ -23,8 +23,10 @@ export function analyzeDocument(file, kind, _today, { signal, token, onStart } =
         method: 'POST', body, signal: controller.signal, credentials: 'same-origin',
         headers: { 'X-Document-Check-Token': token },
       });
-      if (!response.ok) throw new Error('Analysis unavailable');
       const result = await response.json();
+      if (!response.ok && !(result.status === 'unknown' && typeof result.receipt === 'string')) {
+        throw new Error('Analysis unavailable');
+      }
       if (!['success', 'info', 'warning', 'unknown'].includes(result.status) || typeof result.message !== 'string'
           || (result.title !== undefined && typeof result.title !== 'string')
           || (result.critical !== undefined && typeof result.critical !== 'string')) {
