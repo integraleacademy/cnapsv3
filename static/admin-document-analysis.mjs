@@ -26,6 +26,7 @@ function attachSavedDocumentChecks(root = document) {
           const result = await response.json();
           if (typeof result.html !== 'string' || !result.analysis?.status) throw new Error('Invalid result');
           output.innerHTML = result.html;
+          for (const summary of root.querySelectorAll(`[data-analysis-summary-id="${id}"]`)) summary.innerHTML = result.html;
           button.textContent = 'Relancer la vérification';
           progress.textContent = 'Résultat enregistré. Le statut de conformité reste inchangé.';
         } catch {

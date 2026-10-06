@@ -8,13 +8,13 @@
       {% elif state in ['unknown', 'info'] %}<span aria-hidden="true">?</span> Vérification non concluante
       {% else %}<span aria-hidden="true">—</span> Document non vérifié{% endif %}
     </span>
-    {% if state == 'warning' %}<p class="auto-check-kept">Fichier envoyé malgré l’alerte affichée dans le formulaire.</p>{% endif %}
+    {% if state == 'warning' %}<p class="auto-check-kept">{{ 'Anomalie détectée lors de la vérification du fichier enregistré.' if analysis.source == 'saved_document' else 'Fichier envoyé malgré l’alerte affichée dans le formulaire.' }}</p>{% endif %}
     {% if state != 'unchecked' %}
       <details class="auto-check-detail">
         <summary>Voir le résultat{% if analysis.checked_label %} · {{ analysis.checked_label }}{% endif %}</summary>
         <p>{{ analysis.message }}</p>
         {% if analysis.critical %}<p>{{ analysis.critical }}</p>{% endif %}
-        <p class="auto-check-note">Contrôle indicatif au moment du dépôt. La décision de conformité reste à votre charge.</p>
+        <p class="auto-check-note">{{ 'Contrôle indicatif du fichier enregistré.' if analysis.source == 'saved_document' else 'Contrôle indicatif au moment du dépôt.' }} La décision de conformité reste à votre charge.</p>
       </details>
     {% else %}
       <p class="auto-check-note">Aucun résultat automatique enregistré pour ce fichier.</p>

@@ -472,7 +472,7 @@
           <h2>Photo d'identité</h2>
           <p>{% if photo.is_conforme == 1 %}✅ Conforme{% elif photo.is_conforme == 0 %}❌ Non conforme{% else %}⏳ À contrôler{% endif %}</p>
           {% if photo.non_conformite_reason %}<p>{{ photo.non_conformite_reason }}</p>{% endif %}
-          {{ analysis_badge(photo.auto_analysis) }}
+          <div data-analysis-summary-id="{{ photo.id }}">{{ analysis_badge(photo.auto_analysis) }}</div>
           <a class="doc-link" href="#controle-photo-identite">Contrôler ou remplacer la photo ↓</a>
         </div>
       {% else %}
