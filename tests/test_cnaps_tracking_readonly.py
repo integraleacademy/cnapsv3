@@ -47,7 +47,7 @@ HEADERS = {"Authorization": "Bearer server-token"}
 IDENTITY = {"nom": "Du'pont", "prenom": "jean pierre"}
 
 
-@pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer wrong"}, {"X-API-Key": "server-token"}])
+@pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer wrong"}, {"Authorization": "Bearer café"}, {"X-API-Key": "server-token"}])
 def test_requires_api_token_before_reading_any_identity(tracking, headers):
     client, _, calls, _ = tracking
     response = client.get("/api/cnaps-tracking", query_string=IDENTITY, headers=headers)

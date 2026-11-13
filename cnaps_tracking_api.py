@@ -58,7 +58,7 @@ def register_cnaps_tracking_api(app, *, db_path, token_is_valid, dataset_loader)
     def tracking():
         authorization = str(request.headers.get("Authorization") or "").strip()
         token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
-        if not token_is_valid(token):
+        if not token.isascii() or not token_is_valid(token):
             return jsonify(success=False, error="UNAUTHORIZED"), 401
 
         last_name = str(request.args.get("nom") or "").strip()
