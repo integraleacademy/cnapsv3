@@ -2548,6 +2548,16 @@ def public_form():
     return render_template("public_form_success.html", prenom=prenom)
 
 
+from cnaps_tracking_api import register_cnaps_tracking_api
+
+register_cnaps_tracking_api(
+    app,
+    db_path=lambda: DB_NAME,
+    token_is_valid=lambda token: _is_valid_cnapsv3_api_token(token),
+    dataset_loader=lambda conn: _load_a_traiter_dataset(conn),
+)
+
+
 @app.route("/api/a-traiter", methods=["GET"])
 def api_a_traiter():
     token = _extract_bearer_token()
